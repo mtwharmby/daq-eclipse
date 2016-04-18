@@ -4,6 +4,7 @@ language: java
 branches:
  only:
   - master
+  - travis
  
 jdk:
  - oraclejdk8
@@ -19,7 +20,7 @@ before_install:
 # Run the build from org.eclipse.scanning
 install:
   - cd ../../eclipse
-  - mv ../DiamondLightSource/daq-eclipse org.eclipse.scanning
+  - mv ../mtwharmby/daq-eclipse org.eclipse.scanning
   - cd org.eclipse.scanning
  
 # compile and test
