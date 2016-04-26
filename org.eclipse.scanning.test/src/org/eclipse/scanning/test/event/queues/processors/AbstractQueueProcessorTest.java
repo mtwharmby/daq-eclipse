@@ -11,7 +11,6 @@ import java.util.concurrent.CountDownLatch;
 
 import org.eclipse.scanning.api.event.core.IConsumerProcess;
 import org.eclipse.scanning.api.event.core.IPublisher;
-import org.eclipse.scanning.api.event.queues.beans.QueueAtom;
 import org.eclipse.scanning.api.event.queues.beans.Queueable;
 import org.eclipse.scanning.api.event.status.Status;
 import org.eclipse.scanning.test.event.queues.mocks.DummyQueueable;
@@ -22,7 +21,7 @@ public abstract class AbstractQueueProcessorTest<T extends Queueable> {
 	
 	protected IConsumerProcess<T> proc;
 	
-	protected IPublisher<QueueAtom> statPub;
+	protected IPublisher<T> statPub;
 	protected URI uri;
 	protected String topic = "active.queue";
 	
@@ -38,7 +37,7 @@ public abstract class AbstractQueueProcessorTest<T extends Queueable> {
 	
 	protected void createStatusPublisher() throws Exception {
 		uri = new URI("vm://localhost?broker.persistent=false");
-		statPub = new MockPublisher<QueueAtom>(uri, topic);
+		statPub = new MockPublisher<T>(uri, topic);
 	}
 	
 	protected void doExecute() throws Exception {
@@ -69,7 +68,7 @@ public abstract class AbstractQueueProcessorTest<T extends Queueable> {
 		
 		DummyQueueable firstBean, lastButTwoBean, lastBean;
 		
-		List<DummyQueueable> broadcastBeans = ((MockPublisher<QueueAtom>)statPub).getBroadcastBeans();
+		List<DummyQueueable> broadcastBeans = ((MockPublisher<T>)statPub).getBroadcastBeans();
 		firstBean =  broadcastBeans.get(0);
 		lastButTwoBean = broadcastBeans.get(broadcastBeans.size()-3);
 		lastBean = broadcastBeans.get(broadcastBeans.size()-1);
@@ -100,7 +99,7 @@ public abstract class AbstractQueueProcessorTest<T extends Queueable> {
 		
 		if(repStat.length != repPerc.length) throw new Exception("Different numbers of statuses & percentages given!");
 		
-		List<DummyQueueable> broadcastBeans = ((MockPublisher<QueueAtom>)statPub).getBroadcastBeans();
+		List<DummyQueueable> broadcastBeans = ((MockPublisher<T>)statPub).getBroadcastBeans();
 		DummyQueueable bean;
 		for(int i = 0; i < repStat.length; i++) {
 			bean = broadcastBeans.get(i);
@@ -111,14 +110,14 @@ public abstract class AbstractQueueProcessorTest<T extends Queueable> {
 
 	protected void pauseForMockFinalStatus() throws Exception {
 		boolean notFinal = true;
-		List<DummyQueueable> broadcastBeans = ((MockPublisher<QueueAtom>)statPub).getBroadcastBeans();
+		List<DummyQueueable> broadcastBeans = ((MockPublisher<T>)statPub).getBroadcastBeans();
 		DummyQueueable lastBean = broadcastBeans.get(broadcastBeans.size()-1);
 		
 		while (notFinal) {
 			if (lastBean.getStatus().isFinal()) return;
 			Thread.sleep(100);
 			
-			broadcastBeans = ((MockPublisher<QueueAtom>)statPub).getBroadcastBeans();
+			broadcastBeans = ((MockPublisher<T>)statPub).getBroadcastBeans();
 			lastBean = broadcastBeans.get(broadcastBeans.size()-1);
 		}
 	}
