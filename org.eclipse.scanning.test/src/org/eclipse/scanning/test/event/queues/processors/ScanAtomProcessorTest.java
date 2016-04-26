@@ -84,7 +84,7 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 		processorSetup();
 	}
 	
-	private void  processorSetup() {
+	private void processorSetup() {
 		try {
 			proc = new ScanAtomProcessor().makeProcess(scAt, statPub, true);
 		} catch (EventException e) {
@@ -102,7 +102,7 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 		scanConsumer.disconnect();
 	}
 	
-	//@Test
+	@Test
 	public void testExecution() throws Exception {
 		scAt.setName("Test Execution");
 		doExecute();
@@ -148,7 +148,7 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 	
 	// Attempted to fix intermittent failure on travis.
 	@Test
-	public void testInterruptedExecution() throws Exception {
+	public void testTerminateFromScan() throws Exception {
 		scAt.setName("Test Interrupted Execution");
 		doExecute();
 		
@@ -195,9 +195,8 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 	}
 	
 	@Test
-	public void testErrorInScan() throws Exception {
+	public void testFailureInScan() throws Exception {
 		scAt.setName("Failed scan");
-		processorSetup();
 		doExecute();
 		
 		Thread.sleep(2000);
