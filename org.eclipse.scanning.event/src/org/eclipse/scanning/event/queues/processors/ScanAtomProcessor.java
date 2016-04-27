@@ -62,7 +62,7 @@ public class ScanAtomProcessor implements IQueueProcessor {
 			super(bean, publisher);
 			this.blocking = blocking;
 
-			//We know the bean is of type MoveAtom as this processor wouldn't get
+			//We know the bean is of type ScanAtom as this processor wouldn't get
 			//called otherwise
 			atom = (ScanAtom) bean;
 

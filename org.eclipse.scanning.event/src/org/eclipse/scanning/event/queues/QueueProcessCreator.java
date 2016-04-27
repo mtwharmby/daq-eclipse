@@ -50,7 +50,7 @@ public class QueueProcessCreator<T extends Queueable> implements IProcessCreator
 		processMap.put(SubTaskBean.class.getSimpleName(), new AtomQueueProcessor());
 		processMap.put(TaskBean.class.getSimpleName(), new AtomQueueProcessor());
 
-		//Determine the type of bean and return the appropriate processor
+		//Determine the type of bean and return the appropriate processor //TODO Need to throw an error into the status queue at this point somehow
 		String className = atomBean.getClass().getSimpleName();
 		if (processMap.containsKey(className)) {
 			if(processMap.get(className) == null) throw new EventException("No processor registered for bean");

@@ -32,6 +32,7 @@ public class AtomQueueServiceDummyTest extends AbstractQueueServiceTest {
 	@Before
 	public void createService() throws Exception {
 		//Configure AtomQueueService as necessary before setting the test field
+		//TODO Change setting of queue service.
 		AtomQueueService localQServ = new AtomQueueService();
 		localQServ.setQueueRoot(qRoot);
 		localQServ.setURI(uri);
