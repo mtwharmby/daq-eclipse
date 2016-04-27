@@ -62,7 +62,7 @@ public class MockPublisher<T> implements IPublisher<T> {
 		broadBean.setName(((StatusBean)bean).getName());
 		
 		if (bean instanceof IAtomWithChildQueue) {
-			broadBean.setQueueMessage(((IAtomWithChildQueue)bean).getQueueMessage());
+			broadBean.setQueueMessage(((IAtomWithChildQueue<?>)bean).getQueueMessage());
 		}
 		
 		broadcastBeans.add(broadBean);

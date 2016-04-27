@@ -136,7 +136,7 @@ public abstract class AbstractQueueProcessorTest<T extends Queueable> {
 	}
 	
 	private DummyQueueable getLastBean(long timeOut) throws Exception {
-		List<DummyQueueable> broadcastBeans = ((MockPublisher<QueueAtom>)statPub).getBroadcastBeans();
+		List<DummyQueueable> broadcastBeans = ((MockPublisher<T>)statPub).getBroadcastBeans();
 		long startTime = System.currentTimeMillis();
 		while (broadcastBeans.size() == 0) {
 			Thread.sleep(100);
