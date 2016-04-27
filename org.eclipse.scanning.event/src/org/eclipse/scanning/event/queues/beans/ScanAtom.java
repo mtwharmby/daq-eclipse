@@ -1,6 +1,7 @@
 package org.eclipse.scanning.event.queues.beans;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 import org.eclipse.scanning.api.device.models.IDetectorModel;
@@ -19,26 +20,27 @@ import org.eclipse.scanning.api.points.models.IScanPathModel;
  * @author Michael Wharmby
  *
  */
-public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
-	
+public class ScanAtom extends QueueAtom implements IAtomWithChildQueue<ScanBean> {
+
 	private Collection<IScanPathModel> pathModels;
 	private Collection<String> monitors;
 	private Map<String,IDetectorModel> detectorModels;
-//	private IProcess perPointProcess;//TODO
+	//	private IProcess perPointProcess;//TODO
 	private String queueMessage;
-	
+	private List<ScanBean> finalStatusSet;
+
 	private String scanSubmitQueueName;
 	private String scanStatusQueueName;
 	private String scanStatusTopicName;
 	private String scanConsumerURI;
-	
+
 	/**
 	 * No arg constructor for JSON
 	 */
 	public ScanAtom() {
 		super();
 	}
-	
+
 	/**
 	 * Constructor with required arguments to configure a scan of positions 
 	 * using only detectors to collect data.
@@ -54,7 +56,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 		pathModels = pMods;
 		detectorModels = dMods;
 	}
-	
+
 	/**
 	 * Constructor with required arguments to configure a scan of positions 
 	 * using both detectors and monitors to collect data.
@@ -87,7 +89,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	public void setPathModels(Collection<IScanPathModel> pathModels) {
 		this.pathModels = pathModels;
 	}
-	
+
 	/**
 	 * Add another motor movement model to the scan.
 	 * 
@@ -96,7 +98,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	public void addPathModel(IScanPathModel pathModel) {
 		pathModels.add(pathModel);
 	}
-	
+
 	/**
 	 * Remove an existing motor movement model from the scan.
 	 * 
@@ -125,7 +127,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	public void setMonitors(Collection<String> monitors) {
 		this.monitors = monitors;
 	}
-	
+
 	/**
 	 * Add a monitor to the collection of monitors to be polled during the scan.
 	 *  
@@ -134,7 +136,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	public void addMonitor(String monitor) {
 		monitors.add(monitor);
 	}
-	
+
 	/**
 	 * Remove a monitor from the collection of monitors to be polled during the
 	 * scan.
@@ -166,7 +168,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	public void setDetectorModels(Map<String, IDetectorModel> detModels) {
 		this.detectorModels = detModels;
 	}
-	
+
 	/**
 	 * Add a detector to the collection of detectors from which data will be 
 	 * recorded during the scan.
@@ -177,7 +179,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	public void addDetector(String detName, IDetectorModel detModel) {
 		detectorModels.put(detName, detModel);
 	}
-	
+
 	/**
 	 * Remove a detector from the collection of detectors from which data will 
 	 * be recorded during the scan.
@@ -187,7 +189,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	public void removeDetector(String detName) {
 		detectorModels.remove(detName);
 	}
-	
+
 	@Override
 	public String getQueueMessage() {
 		return queueMessage;
@@ -231,31 +233,33 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	}
 
 	@Override
+	public List<ScanBean> getFinalStatusSet() {
+		return finalStatusSet;
+	}
+
+	@Override
+	public void setFinalStatusSet(List<ScanBean> statusSet) {
+		finalStatusSet = statusSet;
+	}
+
+	@Override
+	public void addFinalStatusBean(ScanBean finalBean) {
+		finalStatusSet.add(finalBean);
+	}
+
+	@Override
 	public int hashCode() {
 		final int prime = 31;
 		int result = super.hashCode();
-		result = prime * result
-				+ ((detectorModels == null) ? 0 : detectorModels.hashCode());
-		result = prime * result
-				+ ((monitors == null) ? 0 : monitors.hashCode());
-		result = prime * result
-				+ ((pathModels == null) ? 0 : pathModels.hashCode());
-		result = prime * result
-				+ ((queueMessage == null) ? 0 : queueMessage.hashCode());
-		result = prime * result
-				+ ((scanConsumerURI == null) ? 0 : scanConsumerURI.hashCode());
-		result = prime
-				* result
-				+ ((scanStatusQueueName == null) ? 0 : scanStatusQueueName
-						.hashCode());
-		result = prime
-				* result
-				+ ((scanStatusTopicName == null) ? 0 : scanStatusTopicName
-						.hashCode());
-		result = prime
-				* result
-				+ ((scanSubmitQueueName == null) ? 0 : scanSubmitQueueName
-						.hashCode());
+		result = prime * result + ((detectorModels == null) ? 0 : detectorModels.hashCode());
+		result = prime * result + ((finalStatusSet == null) ? 0 : finalStatusSet.hashCode());
+		result = prime * result + ((monitors == null) ? 0 : monitors.hashCode());
+		result = prime * result + ((pathModels == null) ? 0 : pathModels.hashCode());
+		result = prime * result + ((queueMessage == null) ? 0 : queueMessage.hashCode());
+		result = prime * result + ((scanConsumerURI == null) ? 0 : scanConsumerURI.hashCode());
+		result = prime * result + ((scanStatusQueueName == null) ? 0 : scanStatusQueueName.hashCode());
+		result = prime * result + ((scanStatusTopicName == null) ? 0 : scanStatusTopicName.hashCode());
+		result = prime * result + ((scanSubmitQueueName == null) ? 0 : scanSubmitQueueName.hashCode());
 		return result;
 	}
 
@@ -272,6 +276,11 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 			if (other.detectorModels != null)
 				return false;
 		} else if (!detectorModels.equals(other.detectorModels))
+			return false;
+		if (finalStatusSet == null) {
+			if (other.finalStatusSet != null)
+				return false;
+		} else if (!finalStatusSet.equals(other.finalStatusSet))
 			return false;
 		if (monitors == null) {
 			if (other.monitors != null)

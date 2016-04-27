@@ -1,5 +1,7 @@
 package org.eclipse.scanning.event.queues.beans;
 
+import java.util.List;
+
 import org.eclipse.scanning.api.event.queues.IQueueService;
 import org.eclipse.scanning.api.event.queues.beans.IAtomBeanWithQueue;
 import org.eclipse.scanning.api.event.queues.beans.IAtomQueue;
@@ -26,6 +28,7 @@ public class SubTaskBean extends QueueAtom implements IAtomBeanWithQueue<QueueAt
 	
 	private IAtomQueue<QueueAtom> atomQueue = new AtomQueue<QueueAtom>();
 	private String queueMessage;
+	private List<QueueAtom> finalStatusSet;
 	
 	/**
 	 * No argument constructor for JSON
@@ -85,10 +88,26 @@ public class SubTaskBean extends QueueAtom implements IAtomBeanWithQueue<QueueAt
 	}
 
 	@Override
+	public List<QueueAtom> getFinalStatusSet() {
+		return finalStatusSet;
+	}
+
+	@Override
+	public void setFinalStatusSet(List<QueueAtom> statusSet) {
+		finalStatusSet = statusSet;
+	}
+
+	@Override
+	public void addFinalStatusBean(QueueAtom finalBean) {
+		finalStatusSet.add(finalBean);
+	}
+
+	@Override
 	public int hashCode() {
 		final int prime = 31;
 		int result = super.hashCode();
 		result = prime * result + ((atomQueue == null) ? 0 : atomQueue.hashCode());
+		result = prime * result + ((finalStatusSet == null) ? 0 : finalStatusSet.hashCode());
 		result = prime * result + ((queueMessage == null) ? 0 : queueMessage.hashCode());
 		return result;
 	}
@@ -106,6 +125,11 @@ public class SubTaskBean extends QueueAtom implements IAtomBeanWithQueue<QueueAt
 			if (other.atomQueue != null)
 				return false;
 		} else if (!atomQueue.equals(other.atomQueue))
+			return false;
+		if (finalStatusSet == null) {
+			if (other.finalStatusSet != null)
+				return false;
+		} else if (!finalStatusSet.equals(other.finalStatusSet))
 			return false;
 		if (queueMessage == null) {
 			if (other.queueMessage != null)
