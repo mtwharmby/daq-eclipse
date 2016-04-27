@@ -2,6 +2,7 @@ package org.eclipse.scanning.test.event.queues.processors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import java.util.List;
 
@@ -60,8 +61,11 @@ public abstract class AbstractAtomQueueProcessorTest<T extends Queueable> extend
 		
 		//Assert we have a properly structured ScanBean
 		@SuppressWarnings("unchecked")// We know this implements IAtomBeanWithQueue, so this is fine
-		List<DummyAtom> statusSet = ((IAtomBeanWithQueue<QueueAtom>)aqAt).queue().getStatusSet();
-		for (DummyAtom dummy : statusSet) {
+		List<QueueAtom> statusSet = ((IAtomBeanWithQueue<QueueAtom>)aqAt).getFinalStatusSet();
+		assertTrue("No beans in the final status set", statusSet.size() != 0);
+		for (QueueAtom dummy : statusSet) {
+			//First check beans are in final state
+			assertTrue("Final bean "+dummy.getName()+" is not final",dummy.getStatus().isFinal());
 			//Check the properties of the ScanAtom have been correctly passed down
 			assertFalse("No beamline set", dummy.getBeamline() == null);
 			assertEquals("Incorrect beamline", aqAt.getBeamline(), dummy.getBeamline());

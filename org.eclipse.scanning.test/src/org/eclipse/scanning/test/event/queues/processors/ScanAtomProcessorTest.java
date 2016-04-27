@@ -43,16 +43,16 @@ import org.junit.Test;
 import uk.ac.diamond.daq.activemq.connector.ActivemqConnectorService;
 
 public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom> {
-	
+
 	private ScanAtom scAt;
-	
+
 	private IEventService evServ;
 	private IProcessCreator<ScanBean> fakeRunner;
 	private URI uri;
-	
+
 	private IConsumer<ScanBean> scanConsumer;
 	private IPublisher<ScanBean> scanPublisher;
-	
+
 	@Before
 	public void setup() throws Exception {
 		//Create the event service and set in ServiceHolder
@@ -69,22 +69,22 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 		scanConsumer.setRunner(fakeRunner);
 		scanConsumer.start();
 		scanPublisher = evServ.createPublisher(uri, IEventService.STATUS_TOPIC);
-		
+
 		createStatusPublisher();
-		
+
 		scAt = TestAtomMaker.makeTestScanAtomA();
 		scAt.setHostName(InetAddress.getLocalHost().getHostName());
 		scAt.setUserName("abc12345");
 		scAt.setBeamline("I15-1");
-		
+
 		scAt.setScanConsumerURI(uri.toString());
 		scAt.setScanSubmitQueueName(IEventService.SUBMISSION_QUEUE);
 		scAt.setScanStatusQueueName(IEventService.STATUS_SET);
 		scAt.setScanStatusTopicName(IEventService.STATUS_TOPIC);
-		
+
 		processorSetup();
 	}
-	
+
 	private void processorSetup() {
 		try {
 			proc = new ScanAtomProcessor().makeProcess(scAt, statPub, true);
@@ -96,19 +96,19 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 	@After
 	public void tearDown() throws Exception {
 		scanPublisher.disconnect();
-		
+
 		scanConsumer.clearQueue(IEventService.SUBMISSION_QUEUE);
 		scanConsumer.clearQueue(IEventService.STATUS_SET);
 		scanConsumer.stop();
 		scanConsumer.disconnect();
 	}
-	
+
 	@Test
 	public void testExecution() throws Exception {
 		scAt.setName("Test Execution");
 		doExecute();
 		executionLatch.await(30, TimeUnit.SECONDS);
-		
+
 		/*
 		 * After execution:
 		 * - first bean in statPub should be Status.RUNNING & 0%
@@ -117,55 +117,59 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 		 * - consumer should have a ScanBean configured as the ScanAtom
 		 *   - should be Status.COMPLETE and 100%
 		 */
-		
+
 		Status[] reportedStatuses = new Status[]{Status.RUNNING, Status.RUNNING,
 				Status.RUNNING, Status.RUNNING, Status.RUNNING};
 		Double[] reportedPercent = new Double[]{0d, 0d, 
 				1.25d, 2.5d, 5d};
-		
+
 		checkBeanStatuses(reportedStatuses, reportedPercent);
 		checkBeanFinalStatus(Status.COMPLETE, true);
-		
+
 		checkConsumerBeans(Status.COMPLETE);
-		
+
 		//Assert we have a properly structured ScanBean
-		List<ScanBean> statusSet = scanConsumer.getStatusSet();
-		ScanBean scan = statusSet.get(statusSet.size()-1);
-		//Check the properties of the ScanAtom have been correctly passed down
-		assertFalse("No beamline set", scan.getBeamline() == null);
-		assertEquals("Incorrect beamline", scAt.getBeamline(), scan.getBeamline());
-		assertFalse("No hostname set", scan.getHostName() == null);
-		assertEquals("Incorrect hostname", scAt.getHostName(), scan.getHostName());
-		assertFalse("No name set", scan.getName() == null);
-		assertEquals("Incorrect name", scAt.getName(), scan.getName());
-		assertFalse("No username set", scan.getUserName() == null);
-		assertEquals("Incorrect username", scAt.getUserName(), scan.getUserName());
-		//Check the ScanRequest itself has been correctly interpreted
-		ScanRequest<?> req = scan.getScanRequest(); 
-		assertEquals("Scan path definitions differ", scAt.getPathModels(), req.getModels());
-		assertEquals("Detector definitions differ", scAt.getDetectorModels(), req.getDetectors());
-		assertEquals("Monitor definitions differ", scAt.getMonitors(), req.getMonitorNames());
+		List<ScanBean> statusSet = scAt.getFinalStatusSet();
+		assertTrue("No beans in the final status set", statusSet.size() != 0);
+		for (ScanBean scan : statusSet) {
+			//First check beans are in final state
+			assertTrue("Final bean "+scan.getName()+" is not final",scan.getStatus().isFinal());
+			//Check the properties of the ScanAtom have been correctly passed down
+			assertFalse("No beamline set", scan.getBeamline() == null);
+			assertEquals("Incorrect beamline", scAt.getBeamline(), scan.getBeamline());
+			assertFalse("No hostname set", scan.getHostName() == null);
+			assertEquals("Incorrect hostname", scAt.getHostName(), scan.getHostName());
+			assertFalse("No name set", scan.getName() == null);
+			assertEquals("Incorrect name", scAt.getName(), scan.getName());
+			assertFalse("No username set", scan.getUserName() == null);
+			assertEquals("Incorrect username", scAt.getUserName(), scan.getUserName());
+			//Check the ScanRequest itself has been correctly interpreted
+			ScanRequest<?> req = scan.getScanRequest(); 
+			assertEquals("Scan path definitions differ", scAt.getPathModels(), req.getModels());
+			assertEquals("Detector definitions differ", scAt.getDetectorModels(), req.getDetectors());
+			assertEquals("Monitor definitions differ", scAt.getMonitors(), req.getMonitorNames());
+		}
 	}
-	
+
 	// Attempted to fix intermittent failure on travis.
 	@Test
 	public void testTerminateFromScan() throws Exception {
 		scAt.setName("Test Interrupted Execution");
 		doExecute();
-		
+
 		//Wait to allow bean onto queue and then get the bean 
 		Thread.sleep(2000);
 		ScanBean scan = scanConsumer.getStatusSet().get(0);
 		scan.setStatus(Status.REQUEST_TERMINATE);
 		scan.setMessage("Emergency stop");
 		scanPublisher.broadcast(scan);
-		
+
 		//Wait to allow the house to come crashing down
 		pauseForStatus(Status.TERMINATED);
-		
+
 		checkConsumerBeans(Status.TERMINATED);
 		checkBeanFinalStatus(Status.REQUEST_TERMINATE, true);//Has to be request since using Mock
-		
+
 		//Check the message was correctly set too
 		//(if this is after the terminate, we're also checking that no further processing is happening)
 		List<DummyQueueable> broadcastBeans = ((MockPublisher<QueueAtom>)statPub).getBroadcastBeans();
@@ -173,7 +177,7 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 		assertEquals("queueMessage differs to expected", "Terminate called from 'Test Interrupted Execution' with message: 'Emergency stop'"
 				, lastBean.getQueueMessage());
 	}
-	
+
 	@Test
 	public void testTermination() throws Exception {
 		scAt.setName("Test Termination");
@@ -183,7 +187,7 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 
 		//Wait for terminate to take effect
 		pauseForStatus(Status.TERMINATED);
-		
+
 		/*
 		 * After execution:
 		 * - first bean in statPub should be Status.RUNNING
@@ -194,12 +198,12 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 		checkBeanFinalStatus(Status.TERMINATED);
 		checkConsumerBeans(Status.TERMINATED);
 	}
-	
+
 	@Test
 	public void testFailureInScan() throws Exception {
 		scAt.setName("Failed scan");
 		doExecute();
-		
+
 		Thread.sleep(2000);
 		ScanBean scan = scanConsumer.getStatusSet().get(0);
 		scan.setStatus(Status.FAILED);
@@ -208,7 +212,7 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 		System.out.println("**************************");
 		System.out.println("*     FAIL BROADCAST     *");
 		System.out.println("**************************");
-		
+
 		pauseForMockFinalStatus(10000);
 		/*
 		 * After execution:
@@ -216,26 +220,26 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 		 * - last bean in statPub should be Status.FAILED and not be 100%
 		 * - consumer should have a ScanBean with Status.FAILED & not 100%
 		 */
-		
+
 		checkBeanFinalStatus(Status.FAILED);
-		
+
 		//Try to end a bit more gracefully; TERMINATE before shutdown 
 		scan.setStatus(Status.REQUEST_TERMINATE);
 		scanPublisher.broadcast(scan);
 		pauseForStatus(Status.TERMINATED);
-		
+
 		//Check the message was correctly set too
 		List<DummyQueueable> broadcastBeans = ((MockPublisher<QueueAtom>)statPub).getBroadcastBeans();
 		DummyQueueable lastBean = broadcastBeans.get(broadcastBeans.size()-1);
 		assertEquals("queueMessage differs to expected", "Error in execution of 'Failed scan'. Message: 'Error!'"
 				, lastBean.getQueueMessage());
 	}
-	
+
 	private void checkConsumerBeans(Status lastStatus) throws EventException {
 		List<ScanBean> statusSet = scanConsumer.getStatusSet();
 		assertTrue("More than one bean in the status queue. Was it cleared?",statusSet.size() == 1);
 		ScanBean lastBean = statusSet.get(statusSet.size()-1);
-		
+
 		if (lastStatus.equals(Status.COMPLETE)) {
 			assertEquals("Unexpected ScanBean final status", lastStatus, lastBean.getStatus());
 			assertEquals("ScanBean percentcomplete wrong", 100d, lastBean.getPercentComplete(), 0);
@@ -248,7 +252,7 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 			fail("Unknown bean final status");
 		}
 	}
-	
+
 	protected void pauseForStatus(Status awaitedStatus) throws Exception {
 		final CountDownLatch statusLatch = new CountDownLatch(1);
 		ISubscriber<IBeanListener<ScanBean>> statusSubsc = evServ.createSubscriber(uri, IEventService.STATUS_TOPIC);
@@ -261,7 +265,7 @@ public class ScanAtomProcessorTest extends AbstractQueueProcessorTest<QueueAtom>
 					statusLatch.countDown();
 				}
 			}
-			
+
 		});
 		statusLatch.await(10, TimeUnit.SECONDS);
 		return;
