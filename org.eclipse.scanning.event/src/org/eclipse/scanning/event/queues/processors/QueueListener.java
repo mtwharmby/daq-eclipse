@@ -73,10 +73,10 @@ class QueueListener<T extends StatusBean, U extends Queueable> implements IBeanL
 						if (qBean.getMessage() != null) {
 							msg = msg+" with message: '"+qBean.getMessage()+"'";
 							}
-							((IAtomWithChildQueue)bean).setQueueMessage(msg);
+							((IAtomWithChildQueue<?>)bean).setQueueMessage(msg);
 							proc.resume();
 						} catch(EventException evEx) {
-							((IAtomWithChildQueue)bean).setQueueMessage("Failed to resume paused process.");
+							((IAtomWithChildQueue<?>)bean).setQueueMessage("Failed to resume paused process.");
 							logger.error("Failed to resume paused process.");
 						}
 					} else {
@@ -89,10 +89,10 @@ class QueueListener<T extends StatusBean, U extends Queueable> implements IBeanL
 						if (qBean.getMessage() != null) {
 							msg = msg+" with message: '"+qBean.getMessage()+"'";
 						}
-						((IAtomWithChildQueue)bean).setQueueMessage(msg);
+						((IAtomWithChildQueue<?>)bean).setQueueMessage(msg);
 						proc.pause();
 					} catch(EventException evEx) {
-						((IAtomWithChildQueue)bean).setQueueMessage("Failed to pause process.");
+						((IAtomWithChildQueue<?>)bean).setQueueMessage("Failed to pause process.");
 						logger.error("Failed to pause process.");
 					}
 				} else if (latestStatus.isTerminated()) {
@@ -104,7 +104,7 @@ class QueueListener<T extends StatusBean, U extends Queueable> implements IBeanL
 						if (qBean.getMessage() != null) {
 							msg = msg+" with message: '"+qBean.getMessage()+"'";
 						}
-						((IAtomWithChildQueue)bean).setQueueMessage(msg);
+						((IAtomWithChildQueue<?>)bean).setQueueMessage(msg);
 						bean.setStatus(Status.REQUEST_TERMINATE);
 					}
 				} else if (latestStatus == Status.COMPLETE) {
@@ -115,7 +115,7 @@ class QueueListener<T extends StatusBean, U extends Queueable> implements IBeanL
 					if (qBean.getMessage() != null) {
 						msg = msg+" Message: '"+qBean.getMessage()+"'";
 					}
-					((IAtomWithChildQueue)bean).setQueueMessage(msg);
+					((IAtomWithChildQueue<?>)bean).setQueueMessage(msg);
 					bean.setStatus(Status.FAILED);
 				} else {
 					weirdStatus(qBean.getName());
@@ -138,7 +138,7 @@ class QueueListener<T extends StatusBean, U extends Queueable> implements IBeanL
 	}
 	
 	private void weirdStatus(String qBeanName) {
-		((IAtomWithChildQueue)bean).setQueueMessage("Received unexpected status from '"+qBeanName+"' bean (Scan bean status: '"+latestStatus+"'; Queue bean status: '"+bean.getStatus()+"') . Continuing...");
+		((IAtomWithChildQueue<?>)bean).setQueueMessage("Received unexpected status from '"+qBeanName+"' bean (Scan bean status: '"+latestStatus+"'; Queue bean status: '"+bean.getStatus()+"') . Continuing...");
 		logger.debug("Unexpected, but not error causing bean Status. Continuing...");
 	}
 
