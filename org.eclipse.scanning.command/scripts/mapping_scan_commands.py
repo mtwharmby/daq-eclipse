@@ -52,7 +52,7 @@ from org.eclipse.scanning.api.event.scan import (ScanBean, ScanRequest)
 from org.eclipse.scanning.api.event.IEventService import (
     SUBMISSION_QUEUE, STATUS_TOPIC)
 from org.eclipse.scanning.server.servlet.Services import (
-    getEventService, getScanService)
+    getEventService, getRunnableDeviceService)
 
 
 # Grepping for 'mscan' in a GDA workspace shows up nothing, so it seems that
@@ -113,6 +113,7 @@ def submit(request, now=False, block=False,
                     .createSubmitter(URI(broker_uri), SUBMISSION_QUEUE)
 
     if block:
+        submitter.setTopicName(STATUS_TOPIC)
         submitter.blockingSubmit(scan_bean)
     else:
         submitter.submit(scan_bean)
@@ -487,7 +488,7 @@ def _instantiate(Bean, params):
 
 def _fetch_model_for_detector(detector_name):
 
-    detector = getScanService().getRunnableDevice(detector_name)
+    detector = getRunnableDeviceService().getRunnableDevice(detector_name)
 
     try:
         assert detector is not None
