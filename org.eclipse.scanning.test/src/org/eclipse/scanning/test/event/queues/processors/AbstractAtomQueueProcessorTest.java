@@ -12,6 +12,7 @@ import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.event.queues.IQueueService;
 import org.eclipse.scanning.api.event.queues.beans.IAtomBeanWithQueue;
 import org.eclipse.scanning.api.event.queues.beans.QueueAtom;
+import org.eclipse.scanning.api.event.queues.beans.QueueBean;
 import org.eclipse.scanning.api.event.queues.beans.Queueable;
 import org.eclipse.scanning.api.event.status.Status;
 import org.eclipse.scanning.event.EventServiceImpl;
@@ -19,6 +20,7 @@ import org.eclipse.scanning.event.queues.AtomQueueService;
 import org.eclipse.scanning.event.queues.QueueServicesHolder;
 import org.eclipse.scanning.event.queues.processors.AtomQueueProcessor;
 import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
+import org.eclipse.scanning.test.event.queues.mocks.AllBeanQueueProcessCreator;
 import org.eclipse.scanning.test.event.queues.mocks.DummyAtom;
 import org.junit.Before;
 import org.junit.Test;
@@ -44,12 +46,16 @@ public abstract class AbstractAtomQueueProcessorTest<T extends Queueable> extend
 		
 		uri = new URI("vm://localhost?broker.persistent=false");
 		ActivemqConnectorService.setJsonMarshaller(new MarshallerService(new PointsModelMarshaller()));
-		evServ = new EventServiceImpl(new ActivemqConnectorService());
-		QueueServicesHolder.setEventService(evServ);
+		QueueServicesHolder.setEventService(new EventServiceImpl(new ActivemqConnectorService()));
 		
 		qServ = new AtomQueueService();
 		qServ.setQueueRoot("uk.ac.diamond.i15-1");
 		qServ.setURI(uri);
+		
+		//Reset the IQueueService generic process creator//TODO Enable these for the test to work better...
+//		qServ.setJobQueueProcessor(new AllBeanQueueProcessCreator<QueueBean>(true));
+//		qServ.setActiveQueueProcessor(new AllBeanQueueProcessCreator<QueueAtom>(true));
+
 		qServ.init();
 		qServ.start();
 		QueueServicesHolder.setQueueService(qServ);
