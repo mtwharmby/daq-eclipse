@@ -7,9 +7,8 @@ import java.util.Map;
 import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.event.alive.IHeartbeatListener;
-import org.eclipse.scanning.api.event.alive.PauseBean;
+import org.eclipse.scanning.api.event.bean.IBeanListener;
 import org.eclipse.scanning.api.event.core.IProcessCreator;
-import org.eclipse.scanning.api.event.core.IPublisher;
 import org.eclipse.scanning.api.event.core.ISubscriber;
 import org.eclipse.scanning.api.event.queues.beans.QueueAtom;
 import org.eclipse.scanning.api.event.queues.beans.QueueBean;
@@ -260,6 +259,8 @@ public interface IQueueService {
 	 * @return List of beans as they appear in the status queue.
 	 */
 	public List<QueueAtom> getActiveQueueStatusSet(String queueID) throws EventException;
+	
+	public <S extends Queueable> ISubscriber<IBeanListener<S>> getQueueSubscriber(String queueID);
 	
 	/**
 	 * Return an {@link ISubscriber} object pre-configured to listen for 

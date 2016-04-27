@@ -16,6 +16,7 @@ import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.event.alive.IHeartbeatListener;
 import org.eclipse.scanning.api.event.alive.KillBean;
+import org.eclipse.scanning.api.event.bean.IBeanListener;
 import org.eclipse.scanning.api.event.core.IConsumer;
 import org.eclipse.scanning.api.event.core.IProcessCreator;
 import org.eclipse.scanning.api.event.core.IPublisher;
@@ -89,6 +90,7 @@ public class AtomQueueService implements IQueueService {
 		
 	}
 	
+	//TODO Remove the following methods.
 	/**
 	 * For use in testing! 
 	 * @param evServ - class implementing IEventService
@@ -112,6 +114,7 @@ public class AtomQueueService implements IQueueService {
 	
 	@Override
 	public void init() throws EventException {
+		eventService = QueueServicesHolder.getEventService();
 		if (eventService == null) throw new IllegalStateException("EventService not set");
 		if (queueRoot == null) throw new IllegalStateException("Queue root has not been specified");
 		if (uri == null) throw new IllegalStateException("URI has not been specified");
@@ -149,7 +152,7 @@ public class AtomQueueService implements IQueueService {
 		if (!jobQueue.getQueueStatus().isStartable()) {
 			throw new EventException("Job queue not startable - Status: " + jobQueue.getQueueStatus());
 		}
-		if (jobQueue.getQueueStatus().isActive()) {
+		if (jobQueue.getQueueStatus().isActive()) { //TODO What if the jobqueue is started but the service is not alive?
 			logger.warn("Job queue is already active.");
 			return;
 		}
@@ -397,6 +400,12 @@ public class AtomQueueService implements IQueueService {
 		return makeQueueSubscriber(queue.getQueueNames().getHeartbeatTopicName());
 	}
 	
+	@Override
+	public <S extends Queueable> ISubscriber<IBeanListener<S>> getQueueSubscriber(String queueID) {
+		IQueue<? extends Queueable> queue = getQueueFromString(queueID);
+		return makeQueueSubscriber(queue.getQueueNames().getStatusTopicName());
+	}
+
 	@Override
 	public IQueue<QueueBean> getJobQueue() {
 		return jobQueue;
