@@ -4,40 +4,68 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.net.URI;
 import java.util.List;
 
+import org.eclipse.dawnsci.json.MarshallerService;
+import org.eclipse.scanning.api.event.IEventService;
+import org.eclipse.scanning.api.event.queues.IQueueService;
 import org.eclipse.scanning.api.event.queues.beans.IAtomBeanWithQueue;
 import org.eclipse.scanning.api.event.queues.beans.QueueAtom;
 import org.eclipse.scanning.api.event.queues.beans.Queueable;
 import org.eclipse.scanning.api.event.status.Status;
+import org.eclipse.scanning.event.EventServiceImpl;
+import org.eclipse.scanning.event.queues.AtomQueueService;
+import org.eclipse.scanning.event.queues.QueueServicesHolder;
 import org.eclipse.scanning.event.queues.processors.AtomQueueProcessor;
+import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
 import org.eclipse.scanning.test.event.queues.mocks.DummyAtom;
 import org.junit.Before;
 import org.junit.Test;
+
+import uk.ac.diamond.daq.activemq.connector.ActivemqConnectorService;
 
 public abstract class AbstractAtomQueueProcessorTest<T extends Queueable> extends AbstractQueueProcessorTest<T> {
 	
 	private DummyAtom felix = new DummyAtom("Felix", 100);
 	private T aqAt;
 	
+	private IEventService evServ;
+	private IQueueService qServ;
+	
+	
 	@SuppressWarnings("unchecked") //queueHolder must be a child of Queueable
 	@Before
-	public void setup() {
+	public void setup() throws Exception {
 		IAtomBeanWithQueue<QueueAtom> queueHolder = makeAtomBean();
 		queueHolder.queue().add(felix);
 		
 		aqAt = (T)queueHolder;
 		
+		uri = new URI("vm://localhost?broker.persistent=false");
+		ActivemqConnectorService.setJsonMarshaller(new MarshallerService(new PointsModelMarshaller()));
+		evServ = new EventServiceImpl(new ActivemqConnectorService());
+		QueueServicesHolder.setEventService(evServ);
+		
+		qServ = new AtomQueueService();
+		qServ.setQueueRoot("uk.ac.diamond.i15-1");
+		qServ.setURI(uri);
+		qServ.init();
+		qServ.start();
+		QueueServicesHolder.setQueueService(qServ);
+		
 		processorSetup();
 	}
 	
-	private void processorSetup() {
+	private void processorSetup() throws Exception {
 		proc = new AtomQueueProcessor().makeProcess(aqAt, statPub, true);
 	}
 		
 	@Test
 	public void testSimpleExecution() throws Exception {
 		doExecute();
+//		executionLatch.await(30, TimeUnit.SECONDS);
+		executionLatch.await();
 		
 		/*
 		 * Execution of T containing single DummyAtom
