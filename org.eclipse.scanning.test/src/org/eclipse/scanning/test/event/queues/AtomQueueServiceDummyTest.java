@@ -9,6 +9,7 @@ import org.eclipse.scanning.api.event.queues.beans.QueueAtom;
 import org.eclipse.scanning.api.event.queues.beans.QueueBean;
 import org.eclipse.scanning.event.EventServiceImpl;
 import org.eclipse.scanning.event.queues.AtomQueueService;
+import org.eclipse.scanning.event.queues.QueueServicesHolder;
 import org.eclipse.scanning.test.event.queues.mocks.AllBeanQueueProcessCreator;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -33,13 +34,13 @@ public class AtomQueueServiceDummyTest extends AbstractQueueServiceTest {
 	public void createService() throws Exception {
 		//Configure AtomQueueService as necessary before setting the test field
 		//TODO Change setting of queue service.
-		AtomQueueService localQServ = new AtomQueueService();
-		localQServ.setQueueRoot(qRoot);
-		localQServ.setURI(uri);
-		ActivemqConnectorService.setJsonMarshaller(new MarshallerService());
-		localQServ.setEventService(new EventServiceImpl(new ActivemqConnectorService()));
 		
-		qServ = localQServ;
+		ActivemqConnectorService.setJsonMarshaller(new MarshallerService());
+		QueueServicesHolder.setEventService(new EventServiceImpl(new ActivemqConnectorService()));
+		
+		qServ = new AtomQueueService();
+		qServ.setQueueRoot(qRoot);
+		qServ.setURI(uri);
 		
 		//Reset the IQueueService generic process creator
 		qServ.setJobQueueProcessor(new AllBeanQueueProcessCreator<QueueBean>(true));
