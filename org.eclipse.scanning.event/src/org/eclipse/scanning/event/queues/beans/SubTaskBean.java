@@ -1,5 +1,6 @@
 package org.eclipse.scanning.event.queues.beans;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.eclipse.scanning.api.event.queues.IQueueService;
@@ -28,7 +29,7 @@ public class SubTaskBean extends QueueAtom implements IAtomBeanWithQueue<QueueAt
 	
 	private IAtomQueue<QueueAtom> atomQueue = new AtomQueue<QueueAtom>();
 	private String queueMessage;
-	private List<QueueAtom> finalStatusSet;
+	private List<QueueAtom> finalStatusSet = new ArrayList<>();
 	
 	/**
 	 * No argument constructor for JSON

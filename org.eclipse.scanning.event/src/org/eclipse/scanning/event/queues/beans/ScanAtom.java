@@ -1,5 +1,6 @@
 package org.eclipse.scanning.event.queues.beans;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +28,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue<ScanBean>
 	private Map<String,IDetectorModel> detectorModels;
 	//	private IProcess perPointProcess;//TODO
 	private String queueMessage;
-	private List<ScanBean> finalStatusSet;
+	private List<ScanBean> finalStatusSet = new ArrayList<>();
 
 	private String scanSubmitQueueName;
 	private String scanStatusQueueName;
