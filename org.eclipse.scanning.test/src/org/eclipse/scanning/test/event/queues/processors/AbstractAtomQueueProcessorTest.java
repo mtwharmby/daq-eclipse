@@ -1,5 +1,10 @@
 package org.eclipse.scanning.test.event.queues.processors;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+
+import java.util.List;
+
 import org.eclipse.scanning.api.event.queues.beans.IAtomBeanWithQueue;
 import org.eclipse.scanning.api.event.queues.beans.QueueAtom;
 import org.eclipse.scanning.api.event.queues.beans.Queueable;
@@ -53,20 +58,22 @@ public abstract class AbstractAtomQueueProcessorTest<T extends Queueable> extend
 		checkBeanStatuses(reportedStatuses, reportedPercent);
 		checkBeanFinalStatus(Status.COMPLETE, true);
 		
-//		//Assert we have a properly structured ScanBean
-//		List<DummyAtom> statusSet = scanConsumer.getStatusSet();
-//		DummyAtom dummy = statusSet.get(statusSet.size()-1);
-//		//Check the properties of the ScanAtom have been correctly passed down
-//		assertFalse("No beamline set", dummy.getBeamline() == null);
-//		assertEquals("Incorrect beamline", aqAt.getBeamline(), dummy.getBeamline());
-//		assertFalse("No hostname set", dummy.getHostName() == null);
-//		assertEquals("Incorrect hostname", aqAt.getHostName(), dummy.getHostName());
-//		assertFalse("No name set", dummy.getName() == null);
-//		assertEquals("Incorrect name", aqAt.getName(), dummy.getName());
-//		assertFalse("No username set", dummy.getUserName() == null);
-//		assertEquals("Incorrect username", aqAt.getUserName(), dummy.getUserName());
+		//Assert we have a properly structured ScanBean
+		@SuppressWarnings("unchecked")// We know this implements IAtomBeanWithQueue, so this is fine
+		List<DummyAtom> statusSet = ((IAtomBeanWithQueue<QueueAtom>)aqAt).queue().getStatusSet();
+		for (DummyAtom dummy : statusSet) {
+			//Check the properties of the ScanAtom have been correctly passed down
+			assertFalse("No beamline set", dummy.getBeamline() == null);
+			assertEquals("Incorrect beamline", aqAt.getBeamline(), dummy.getBeamline());
+			assertFalse("No hostname set", dummy.getHostName() == null);
+			assertEquals("Incorrect hostname", aqAt.getHostName(), dummy.getHostName());
+			assertFalse("No name set", dummy.getName() == null);
+			assertEquals("Incorrect name", aqAt.getName(), dummy.getName());
+			assertFalse("No username set", dummy.getUserName() == null);
+			assertEquals("Incorrect username", aqAt.getUserName(), dummy.getUserName());
+		}
 	}
-	
+
 //6	@Test
 	public void testMultipleExecution() {
 		
