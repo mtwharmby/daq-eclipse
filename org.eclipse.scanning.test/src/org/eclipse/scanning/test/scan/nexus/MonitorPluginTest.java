@@ -2,13 +2,15 @@ package org.eclipse.scanning.test.scan.nexus;
 
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertAxes;
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertIndices;
+import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertScanNotFinished;
+import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertScanPointsGroup;
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertSignal;
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertTarget;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertArrayEquals;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -29,14 +31,13 @@ import org.eclipse.dawnsci.nexus.NXentry;
 import org.eclipse.dawnsci.nexus.NXinstrument;
 import org.eclipse.dawnsci.nexus.NXpositioner;
 import org.eclipse.dawnsci.nexus.NXroot;
-import org.eclipse.dawnsci.nexus.NexusException;
 import org.eclipse.dawnsci.nexus.NexusFile;
 import org.eclipse.dawnsci.nexus.NexusUtils;
 import org.eclipse.scanning.api.IScannable;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IDeviceConnectorService;
-import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableDevice;
+import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableEventDevice;
 import org.eclipse.scanning.api.device.IWritableDetector;
 import org.eclipse.scanning.api.event.scan.DeviceState;
@@ -80,7 +81,7 @@ public class MonitorPluginTest {
 		detector = (IWritableDetector<ConstantVelocityModel>)service.createRunnableDevice(model);
 		assertNotNull(detector);
 		
-		detector.addRunListener(new IRunListener.Stub() {
+		detector.addRunListener(new IRunListener() {
 			@Override
 			public void runPerformed(RunEvent evt) throws ScanningException{
                 System.out.println("Ran cv device detector @ "+evt.getPosition());
@@ -109,11 +110,22 @@ public class MonitorPluginTest {
 		testScan(2, 1, 1, 1, 1, 1, 1, 1);
 	}
 
-	
+	private NXroot getNexusRoot(IRunnableDevice<ScanModel> scanner) throws Exception {
+		String filePath = ((AbstractRunnableDevice<ScanModel>) scanner).getModel().getFilePath();
+
+		NexusFile nf = fileFactory.newNexusFile(filePath);
+		nf.openToRead();
+		
+		TreeFile nexusTree = NexusUtils.loadNexusTree(nf);
+		return (NXroot) nexusTree.getGroupNode();
+	}
+
 	private void testScan(int... shape) throws Exception {
 		
 		final List<String>        monitors = Arrays.asList("monitor1", "monitor2");
 		IRunnableDevice<ScanModel> scanner = createNestedStepScanWithMonitors(detector, monitors, shape); // Outer scan of another scannable, for instance temp.
+		assertScanNotFinished(getNexusRoot(scanner).getEntry());
+
 		scanner.run(null);
 	
 		// Check we reached ready (it will normally throw an exception on error)
@@ -121,21 +133,16 @@ public class MonitorPluginTest {
 	}
 
 
-	private void checkNexusFile(IRunnableDevice<ScanModel> scanner, List<String> monitorNames, int... sizes) throws NexusException, ScanningException {
+	private void checkNexusFile(IRunnableDevice<ScanModel> scanner, List<String> monitorNames, int... sizes) throws Exception {
 		
 		final ScanModel scanModel = ((AbstractRunnableDevice<ScanModel>)scanner).getModel();                      
-		                                                                                                    
 		assertEquals(DeviceState.READY, scanner.getDeviceState());                                                
-                                                                                                            
-		String filePath = ((AbstractRunnableDevice<ScanModel>)scanner).getModel().getFilePath();            
-                                                                                                            
-		NexusFile nf = fileFactory.newNexusFile(filePath);                                                  
-		nf.openToRead();                                      
-		
-		TreeFile nexusTree = NexusUtils.loadNexusTree(nf);
-		NXroot rootNode = (NXroot) nexusTree.getGroupNode();
+		NXroot rootNode = getNexusRoot(scanner);
 		NXentry entry = rootNode.getEntry();
 		NXinstrument instrument = entry.getInstrument();
+		
+		// check that the scan points have been written correctly
+		assertScanPointsGroup(entry, sizes);
 		
 		String detectorName = scanModel.getDetectors().get(0).getName();
 		NXdetector detector = instrument.getDetector(detectorName);
@@ -218,7 +225,7 @@ public class MonitorPluginTest {
 			smodel = new StepModel("yNex", 10,20,30); // Will generate one value at 10
 		}
 		
-		IPointGenerator<?,IPosition> gen = gservice.createGenerator(smodel);
+		IPointGenerator<?> gen = gservice.createGenerator(smodel);
 		assertEquals(ySize, gen.size());
 		
 		// We add the outer scans, if any
@@ -230,7 +237,7 @@ public class MonitorPluginTest {
 				} else {
 					model = new StepModel("neXusScannable"+(dim+1), 10,20,30); // Will generate one value at 10
 				}
-				final IPointGenerator<?,IPosition> step = gservice.createGenerator(model);
+				final IPointGenerator<?> step = gservice.createGenerator(model);
 				gen = gservice.createCompoundGenerator(step, gen);
 			}
 		}
@@ -250,8 +257,8 @@ public class MonitorPluginTest {
 		// Create a scan and run it without publishing events
 		IRunnableDevice<ScanModel> scanner = service.createRunnableDevice(scanModel, null);
 		
-		final IPointGenerator<?,IPosition> fgen = gen;
-		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener.Stub() {
+		final IPointGenerator<?> fgen = gen;
+		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener() {
 			@Override
 			public void runWillPerform(RunEvent evt) throws ScanningException{
                 try {

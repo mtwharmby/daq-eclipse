@@ -2,6 +2,8 @@ package org.eclipse.scanning.test.scan.nexus;
 
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertAxes;
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertIndices;
+import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertScanNotFinished;
+import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertScanPointsGroup;
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertSignal;
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertTarget;
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -13,6 +15,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThat;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,6 +23,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import org.eclipse.dawnsci.analysis.api.dataset.IDataset;
 import org.eclipse.dawnsci.analysis.api.tree.TreeFile;
@@ -36,15 +40,14 @@ import org.eclipse.dawnsci.nexus.NexusFile;
 import org.eclipse.dawnsci.nexus.NexusUtils;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IDeviceConnectorService;
-import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableDevice;
+import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableEventDevice;
 import org.eclipse.scanning.api.device.IWritableDetector;
 import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.points.GeneratorException;
 import org.eclipse.scanning.api.points.IPointGenerator;
 import org.eclipse.scanning.api.points.IPointGeneratorService;
-import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.points.models.BoundingBox;
 import org.eclipse.scanning.api.points.models.GridModel;
 import org.eclipse.scanning.api.points.models.StepModel;
@@ -86,7 +89,7 @@ public class DarkPluginTest {
 		
 		detector = (IWritableDetector<MandelbrotModel>)service.createRunnableDevice(model);
 		assertNotNull(detector);
-		detector.addRunListener(new IRunListener.Stub() {
+		detector.addRunListener(new IRunListener() {
 			@Override
 			public void runPerformed(RunEvent evt) throws ScanningException{
                 System.out.println("Ran mandelbrot detector @ "+evt.getPosition());
@@ -96,7 +99,7 @@ public class DarkPluginTest {
 		DarkImageModel dmodel = new DarkImageModel();
 		dark =  (IWritableDetector<DarkImageModel>)service.createRunnableDevice(dmodel);
 		assertNotNull(dark);
-		dark.addRunListener(new IRunListener.Stub() {
+		dark.addRunListener(new IRunListener() {
 			@Override
 			public void writePerformed(RunEvent evt) throws ScanningException{
                 System.out.println("Wrote dark image @ "+evt.getPosition());
@@ -104,6 +107,16 @@ public class DarkPluginTest {
 		});
 	}
 	
+	private NXroot getNexusRoot(IRunnableDevice<ScanModel> scanner) throws Exception {
+		String filePath = ((AbstractRunnableDevice<ScanModel>) scanner).getModel().getFilePath();
+
+		NexusFile nf = fileFactory.newNexusFile(filePath);
+		nf.openToRead();
+		
+		TreeFile nexusTree = NexusUtils.loadNexusTree(nf);
+		return (NXroot) nexusTree.getGroupNode();
+	}
+
 	/**
 	 * This test fails if the chunking is not done by the detector.
 	 *  
@@ -114,6 +127,7 @@ public class DarkPluginTest {
 
 		// Tell configure detector to write 1 image into a 2D scan
 		IRunnableDevice<ScanModel> scanner = createGridScan(8, 5);
+		assertScanNotFinished(getNexusRoot(scanner).getEntry());
 		scanner.run(null);
 
 		checkNexusFile(scanner, 8, 5);
@@ -128,6 +142,9 @@ public class DarkPluginTest {
 		nf.openToRead();
 		TreeFile nexusTree = NexusUtils.loadNexusTree(nf);
 		NXroot rootNode = (NXroot) nexusTree.getGroupNode();
+		
+		// check that the scan points have been written correctly
+		assertScanPointsGroup(rootNode.getEntry(), sizes);
 
 		List<String> positionerNames = scanModel.getPositionIterable().iterator().next().getNames();
 		
@@ -196,11 +213,13 @@ public class DarkPluginTest {
 	private void checkNXdata(NXroot rootNode, String detectorName, List<String> scannableNames) {
 		NXentry entry = rootNode.getEntry();
 
-		LinkedHashMap<String, Integer> detectorDataFields = new LinkedHashMap<>();
-		detectorDataFields.put(NXdetector.NX_DATA, 2); // num additional dimensions
-		if (detectorName.equals("mandelbrot")) {
-			detectorDataFields.put("spectrum", 1);
-			detectorDataFields.put("value", 0);
+		LinkedHashMap<String, List<String>> detectorDataFields = new LinkedHashMap<>();
+		if (detectorName.equals("dark")) {
+			detectorDataFields.put(NXdetector.NX_DATA, Arrays.asList("."));
+		} else if (detectorName.equals("mandelbrot")) {
+			detectorDataFields.put(NXdetector.NX_DATA, Arrays.asList("image_x_axis", "image_y_axis"));
+			detectorDataFields.put("spectrum", Arrays.asList("spectrum_axis"));
+			detectorDataFields.put("value", Collections.emptyList());
 		}
 		
 		Map<String, String> expectedDataGroupNamesForDevice =
@@ -230,12 +249,13 @@ public class DarkPluginTest {
 					+ "/data");
 
 			// append _value_demand to each name in list
-			int rank = entry.getInstrument().getDetector(detectorName)
-					.getDataNode(sourceFieldName).getRank();
-			List<String> expectedAxesNames = scannableNames.stream().map(x -> x + "_value_demand").
-					collect(Collectors.toList());
+//			int rank = entry.getInstrument().getDetector(detectorName)
+//					.getDataNode(sourceFieldName).getRank();
+			List<String> expectedAxesNames = Stream.concat(
+					scannableNames.stream().map(x -> x + "_value_demand"),
+					detectorDataFields.get(sourceFieldName).stream()).collect(Collectors.toList());
 			// add placeholder value "." for each additional dimension
-			expectedAxesNames.addAll(Collections.nCopies(rank - scannableNames.size(), "."));
+//			expectedAxesNames.addAll(Collections.nCopies(rank - scannableNames.size(), "."));
 			
 			assertAxes(data, expectedAxesNames.toArray(new String[expectedAxesNames.size()]));
 			int[] defaultDimensionMappings = IntStream.range(0, scannableNames.size()).toArray();
@@ -274,7 +294,7 @@ public class DarkPluginTest {
 		gmodel.setSlowAxisPoints(size[size.length-2]);
 		gmodel.setBoundingBox(new BoundingBox(0,0,3,3));
 		
-		IPointGenerator<?,IPosition> gen = gservice.createGenerator(gmodel);
+		IPointGenerator<?> gen = gservice.createGenerator(gmodel);
 		
 		// We add the outer scans, if any
 		if (size.length > 2) { 
@@ -285,7 +305,7 @@ public class DarkPluginTest {
 				} else {
 					model = new StepModel("neXusScannable"+(dim+1), 10,20,30); // Will generate one value at 10
 				}
-				final IPointGenerator<?,IPosition> step = gservice.createGenerator(model);
+				final IPointGenerator<?> step = gservice.createGenerator(model);
 				gen = gservice.createCompoundGenerator(step, gen);
 			}
 		}
@@ -304,8 +324,8 @@ public class DarkPluginTest {
 		// Create a scan and run it without publishing events
 		IRunnableDevice<ScanModel> scanner = service.createRunnableDevice(smodel, null);
 		
-		final IPointGenerator<?,IPosition> fgen = gen;
-		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener.Stub() {
+		final IPointGenerator<?> fgen = gen;
+		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener() {
 			@Override
 			public void runWillPerform(RunEvent evt) throws ScanningException{
                 try {

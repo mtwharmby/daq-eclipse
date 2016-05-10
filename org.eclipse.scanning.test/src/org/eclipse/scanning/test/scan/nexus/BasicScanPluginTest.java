@@ -2,6 +2,7 @@ package org.eclipse.scanning.test.scan.nexus;
 
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertAxes;
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertIndices;
+import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertScanNotFinished;
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertScanPointsGroup;
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertTarget;
 import static org.junit.Assert.assertArrayEquals;
@@ -23,16 +24,14 @@ import org.eclipse.dawnsci.nexus.NXentry;
 import org.eclipse.dawnsci.nexus.NXinstrument;
 import org.eclipse.dawnsci.nexus.NXpositioner;
 import org.eclipse.dawnsci.nexus.NXroot;
-import org.eclipse.dawnsci.nexus.NexusException;
 import org.eclipse.dawnsci.nexus.NexusFile;
 import org.eclipse.dawnsci.nexus.NexusUtils;
 import org.eclipse.scanning.api.IScannable;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IDeviceConnectorService;
-import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableDevice;
+import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableEventDevice;
-import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.points.GeneratorException;
 import org.eclipse.scanning.api.points.IPointGenerator;
 import org.eclipse.scanning.api.points.IPointGeneratorService;
@@ -113,22 +112,26 @@ public class BasicScanPluginTest {
 
 		// Tell configure detector to write 1 image into a 2D scan
 		IRunnableDevice<ScanModel> scanner = createStepScan(monitor, metadataScannable, shape);
+		assertScanNotFinished(getNexusRoot(scanner).getEntry());
 		scanner.run(null);
 
 		checkNexusFile(scanner, shape);
 	}
-
-	private void checkNexusFile(IRunnableDevice<ScanModel> scanner, int... sizes) throws NexusException, ScanningException {
-		final ScanModel scanModel = ((AbstractRunnableDevice<ScanModel>) scanner).getModel();
-		assertEquals(DeviceState.READY, scanner.getDeviceState());
-
+	
+	private NXroot getNexusRoot(IRunnableDevice<ScanModel> scanner) throws Exception {
 		String filePath = ((AbstractRunnableDevice<ScanModel>) scanner).getModel().getFilePath();
 
 		NexusFile nf = fileFactory.newNexusFile(filePath);
 		nf.openToRead();
 		
 		TreeFile nexusTree = NexusUtils.loadNexusTree(nf);
-		NXroot rootNode = (NXroot) nexusTree.getGroupNode();
+		return (NXroot) nexusTree.getGroupNode();
+	}
+
+	private void checkNexusFile(IRunnableDevice<ScanModel> scanner, int... sizes) throws Exception {
+		final ScanModel scanModel = ((AbstractRunnableDevice<ScanModel>) scanner).getModel();
+
+		NXroot rootNode = getNexusRoot(scanner);
 		NXentry entry = rootNode.getEntry();
 		NXinstrument instrument = entry.getInstrument();
 		
@@ -221,7 +224,7 @@ public class BasicScanPluginTest {
 	private IRunnableDevice<ScanModel> createStepScan(IScannable<?> monitor,
 			IScannable<?> metadataScannable, int... size) throws Exception {
 		
-		IPointGenerator<?,IPosition> gen = null;
+		IPointGenerator<?> gen = null;
 		
 		// We add the outer scans, if any
 		for (int dim = size.length-1; dim>-1; dim--) {
@@ -231,7 +234,7 @@ public class BasicScanPluginTest {
 			} else {
 				model = new StepModel("neXusScannable"+(dim+1), 10,20,30); // Will generate one value at 10
 			}
-			final IPointGenerator<?,IPosition> step = gservice.createGenerator(model);
+			final IPointGenerator<?> step = gservice.createGenerator(model);
 			if (gen!=null) {
 				gen = gservice.createCompoundGenerator(step, gen);
 			} else {
@@ -254,8 +257,8 @@ public class BasicScanPluginTest {
 		// Create a scan and run it without publishing events
 		IRunnableDevice<ScanModel> scanner = service.createRunnableDevice(smodel, null);
 		
-		final IPointGenerator<?,IPosition> fgen = gen;
-		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener.Stub() {
+		final IPointGenerator<?> fgen = gen;
+		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener() {
 			@Override
 			public void runWillPerform(RunEvent evt) throws ScanningException{
                 try {

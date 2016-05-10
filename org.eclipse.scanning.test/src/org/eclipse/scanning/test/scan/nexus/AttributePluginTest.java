@@ -90,7 +90,7 @@ public class AttributePluginTest {
 		
 		detector = (IWritableDetector<MandelbrotModel>)dservice.createRunnableDevice(model);
 		assertNotNull(detector);
-		detector.addRunListener(new IRunListener.Stub() {
+		detector.addRunListener(new IRunListener() {
 			@Override
 			public void runPerformed(RunEvent evt) throws ScanningException{
                 System.out.println("Ran mandelbrot detector @ "+evt.getPosition());
@@ -323,7 +323,7 @@ public class AttributePluginTest {
 		gmodel.setSlowAxisPoints(size[size.length-2]);
 		gmodel.setBoundingBox(new BoundingBox(0,0,3,3));
 		
-		IPointGenerator<?,IPosition> gen = gservice.createGenerator(gmodel);
+		IPointGenerator<?> gen = gservice.createGenerator(gmodel);
 		
 		// We add the outer scans, if any
 		if (size.length > 2) { 
@@ -334,7 +334,7 @@ public class AttributePluginTest {
 				} else {
 					model = new StepModel("neXusScannable"+(dim+1), 10,20,30); // Will generate one value at 10
 				}
-				final IPointGenerator<?,IPosition> step = gservice.createGenerator(model);
+				final IPointGenerator<?> step = gservice.createGenerator(model);
 				gen = gservice.createCompoundGenerator(step, gen);
 			}
 		}
@@ -353,8 +353,8 @@ public class AttributePluginTest {
 		// Create a scan and run it without publishing events
 		IRunnableDevice<ScanModel> scanner = dservice.createRunnableDevice(smodel, null);
 		
-		final IPointGenerator<?,IPosition> fgen = gen;
-		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener.Stub() {
+		final IPointGenerator<?> fgen = gen;
+		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener() {
 			@Override
 			public void runWillPerform(RunEvent evt) throws ScanningException {
 				try {

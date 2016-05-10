@@ -2,6 +2,8 @@ package org.eclipse.scanning.test.scan.nexus;
 
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertAxes;
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertIndices;
+import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertScanNotFinished;
+import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertScanPointsGroup;
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertSignal;
 import static org.eclipse.scanning.test.scan.nexus.NexusAssert.assertTarget;
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -39,13 +41,12 @@ import org.eclipse.dawnsci.nexus.NXpositioner;
 import org.eclipse.dawnsci.nexus.NXroot;
 import org.eclipse.dawnsci.nexus.NXsample;
 import org.eclipse.dawnsci.nexus.NXuser;
-import org.eclipse.dawnsci.nexus.NexusException;
 import org.eclipse.dawnsci.nexus.NexusFile;
 import org.eclipse.dawnsci.nexus.NexusUtils;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IDeviceConnectorService;
-import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableDevice;
+import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableEventDevice;
 import org.eclipse.scanning.api.device.IWritableDetector;
 import org.eclipse.scanning.api.event.IEventService;
@@ -95,7 +96,7 @@ public class ScanMetadataPluginTest {
 		
 		detector = (IWritableDetector<MandelbrotModel>)dservice.createRunnableDevice(model);
 		assertNotNull(detector);
-		detector.addRunListener(new IRunListener.Stub() {
+		detector.addRunListener(new IRunListener() {
 			@Override
 			public void runPerformed(RunEvent evt) throws ScanningException{
                 System.out.println("Ran mandelbrot detector @ "+evt.getPosition());
@@ -131,6 +132,7 @@ public class ScanMetadataPluginTest {
 		scanMetadata.add(userMetadata);
 		
 		IRunnableDevice<ScanModel> scanner = createGridScan(detector, scanMetadata, 2, 2);
+		assertScanNotFinished(getNexusRoot(scanner).getEntry());
 		scanner.run(null);
 		
 		checkNexusFile(scanner, scanMetadata, 2, 2);
@@ -147,7 +149,7 @@ public class ScanMetadataPluginTest {
 		gmodel.setSlowAxisPoints(size[size.length-2]);
 		gmodel.setBoundingBox(new BoundingBox(0,0,3,3));
 		
-		IPointGenerator<?,IPosition> gen = gservice.createGenerator(gmodel);
+		IPointGenerator<?> gen = gservice.createGenerator(gmodel);
 		
 		// We add the outer scans, if any
 		if (size.length > 2) { 
@@ -158,7 +160,7 @@ public class ScanMetadataPluginTest {
 				} else {
 					model = new StepModel("neXusScannable"+(dim+1), 10,20,30); // Will generate one value at 10
 				}
-				final IPointGenerator<?,IPosition> step = gservice.createGenerator(model);
+				final IPointGenerator<?> step = gservice.createGenerator(model);
 				gen = gservice.createCompoundGenerator(step, gen);
 			}
 		}
@@ -178,8 +180,8 @@ public class ScanMetadataPluginTest {
 		// Create a scan and run it without publishing events
 		IRunnableDevice<ScanModel> scanner = dservice.createRunnableDevice(smodel, null);
 		
-		final IPointGenerator<?,IPosition> fgen = gen;
-		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener.Stub() {
+		final IPointGenerator<?> fgen = gen;
+		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener() {
 			@Override
 			public void runWillPerform(RunEvent evt) throws ScanningException {
 				try {
@@ -231,21 +233,27 @@ public class ScanMetadataPluginTest {
 		}
 	}
 	
+	private NXroot getNexusRoot(IRunnableDevice<ScanModel> scanner) throws Exception {
+		String filePath = ((AbstractRunnableDevice<ScanModel>) scanner).getModel().getFilePath();
+
+		NexusFile nf = fileFactory.newNexusFile(filePath);
+		nf.openToRead();
+		
+		TreeFile nexusTree = NexusUtils.loadNexusTree(nf);
+		return (NXroot) nexusTree.getGroupNode();
+	}
+
 	private void checkNexusFile(IRunnableDevice<ScanModel> scanner,
-			List<ScanMetadata> scanMetadata, int... sizes)
-			throws NexusException, ScanningException {
+			List<ScanMetadata> scanMetadata, int... sizes) throws Exception {
 
 		final ScanModel scanModel = ((AbstractRunnableDevice<ScanModel>) scanner).getModel();
 		assertEquals(DeviceState.READY, scanner.getDeviceState());
 
-		String filePath = ((AbstractRunnableDevice<ScanModel>) scanner).getModel().getFilePath();
-		NexusFile nf = fileFactory.newNexusFile(filePath);
-		nf.openToRead();
-
-		TreeFile nexusTree = NexusUtils.loadNexusTree(nf);
-		NXroot rootNode = (NXroot) nexusTree.getGroupNode();
+		NXroot rootNode = getNexusRoot(scanner);
 		NXentry entry = rootNode.getEntry();
 		checkMetadata(entry, scanMetadata);
+		// check that the scan points have been written correctly
+		assertScanPointsGroup(entry, sizes);
 		
 		NXinstrument instrument = entry.getInstrument();
 
@@ -338,8 +346,6 @@ public class ScanMetadataPluginTest {
 						"/entry/instrument/" + scannableName + "/" + NXpositioner.NX_VALUE);
 			}
 		}
-
-		nf.close();
 	}
 
 }
