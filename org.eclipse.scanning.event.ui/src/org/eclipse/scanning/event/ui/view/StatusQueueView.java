@@ -19,6 +19,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.eclipse.core.runtime.IConfigurationElement;
 import org.eclipse.core.runtime.IProgressMonitor;
@@ -424,6 +425,7 @@ public class StatusQueueView extends EventConnectionView {
 					purgeQueues();
 				} catch (EventException e) {
 					e.printStackTrace();
+					logger.error("Canot purge queues", e);
 				}
 			}
 		};
@@ -634,7 +636,12 @@ public class StatusQueueView extends EventConnectionView {
 					final IRerunHandler handler = (IRerunHandler)i.createExecutableExtension("class");
 					handler.init(service, createConsumerConfiguration());
 					if (handler.isHandled(bean)) {
-						boolean ok = handler.run(bean);
+						final StatusBean copy = bean.getClass().newInstance();
+						copy.merge(bean);
+						copy.setUniqueId(UUID.randomUUID().toString());
+						copy.setStatus(org.eclipse.scanning.api.event.status.Status.SUBMITTED);
+						copy.setSubmissionTime(System.currentTimeMillis());
+						boolean ok = handler.run(copy);
 						if (ok) return;
 					}
 				}
@@ -666,6 +673,7 @@ public class StatusQueueView extends EventConnectionView {
 			
 			final StatusBean copy = bean.getClass().newInstance();
 			copy.merge(bean);
+			copy.setUniqueId(UUID.randomUUID().toString());
 			copy.setMessage("Rerun of "+bean.getName());
 			
 			IPreferenceStore store = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.scanning.event.ui");

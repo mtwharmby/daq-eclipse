@@ -31,6 +31,8 @@ import org.eclipse.scanning.api.script.ScriptExecutionException;
 import org.eclipse.scanning.api.script.ScriptRequest;
 import org.eclipse.scanning.api.script.ScriptResponse;
 import org.eclipse.scanning.api.script.UnsupportedLanguageException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Object for running a scan.
@@ -39,6 +41,8 @@ import org.eclipse.scanning.api.script.UnsupportedLanguageException;
  *
  */
 class ScanProcess extends AbstractPausableProcess<ScanBean> {
+	
+	private static final Logger logger = LoggerFactory.getLogger(ScanProcess.class);
 
 	// Services
 	private IPositioner                positioner;
@@ -120,6 +124,7 @@ class ScanProcess extends AbstractPausableProcess<ScanBean> {
 	    // Intentionally do not catch EventException, that passes straight up.
 		} catch (ScanningException | InterruptedException | UnsupportedLanguageException | ScriptExecutionException ne) {
 			ne.printStackTrace();
+			logger.error("Cannot exexute run "+getBean().getUniqueId(), ne);
 			bean.setPreviousStatus(Status.RUNNING);
 			bean.setStatus(Status.FAILED);
 			bean.setMessage(ne.getMessage());
@@ -194,9 +199,9 @@ class ScanProcess extends AbstractPausableProcess<ScanBean> {
 	private Iterable<IPosition> getPositionIterable(ScanRequest<?> req) throws GeneratorException {
 		IPointGeneratorService service = Services.getGeneratorService();
 		
-		IPointGenerator<?,? extends IPosition> ret = null;
+		IPointGenerator<?> ret = null;
 		for (IScanPathModel model : req.getModels()) {
-			IPointGenerator<?,? extends IPosition> gen = service.createGenerator(model, req.getRegions(model.getUniqueKey()));
+			IPointGenerator<?> gen = service.createGenerator(model, req.getRegions(model.getUniqueKey()));
 			if (ret != null) ret = service.createCompoundGenerator(ret, gen);
 			if (ret==null) ret = gen;
 		}
