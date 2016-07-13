@@ -1,10 +1,7 @@
 package org.eclipse.scanning.test.event.queues;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -33,10 +30,10 @@ import org.eclipse.scanning.api.event.queues.beans.Queueable;
 import org.eclipse.scanning.api.event.status.Status;
 import org.eclipse.scanning.api.event.status.StatusBean;
 import org.eclipse.scanning.event.queues.HeartbeatMonitor;
+import org.eclipse.scanning.event.queues.QueueProcessCreator;
 import org.eclipse.scanning.test.BrokerTest;
-import org.eclipse.scanning.test.event.queues.mocks.AllBeanQueueProcessCreator;
-import org.eclipse.scanning.test.event.queues.mocks.DummyAtom;
-import org.eclipse.scanning.test.event.queues.mocks.DummyBean;
+import org.eclipse.scanning.test.event.queues.dummy.DummyAtom;
+import org.eclipse.scanning.test.event.queues.dummy.DummyBean;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -393,13 +390,13 @@ public class AbstractQueueServiceTest extends BrokerTest {
 		
 		//Change the jobQueueProcessor or the activeQueueProcessor
 		try {
-			qServ.setJobQueueProcessor(new AllBeanQueueProcessCreator<QueueBean>(false));
+			qServ.setJobQueueProcessor(new QueueProcessCreator<QueueBean>(false));
 			fail("Shouldn't be able to change the queue processor whilst service is started.");
 		} catch (EventException e) {
 			//expected
 		}
 		try {
-			qServ.setActiveQueueProcessor(new AllBeanQueueProcessCreator<QueueAtom>(false));
+			qServ.setActiveQueueProcessor(new QueueProcessCreator<QueueAtom>(false));
 			fail("Shouldn't be able to change the queue processor whilst service is started.");
 		} catch (EventException e) {
 			//expected
@@ -439,16 +436,16 @@ public class AbstractQueueServiceTest extends BrokerTest {
 		if (expected.equals(Status.SUBMITTED)) {
 			assertEquals("Submitted and completed beans are different!", bean, complete);
 		} else {
-		assertThat("Submitted bean and complete bean are identical!", bean, is(not(complete)));
+			assertTrue("Submitted bean and complete bean are identical!", !bean.equals(complete));
 		}
 		assertEquals("The bean in the queue has the wrong final state!", expected, complete.getStatus());
 		if (expected.equals(Status.COMPLETE)) {
-			assertThat("The percent complete is not 100!", complete.getPercentComplete(), is(100));
+			assertTrue("The percent complete is not 100!", complete.getPercentComplete()==100);
 		} else {
-			assertThat("The percent complete is 100!", complete.getPercentComplete(), is(not(100)));
+			assertTrue("The percent complete is 100!", complete.getPercentComplete()!=100);
 		}
 	}
-	
+
 	protected void checkForShutdownConsumer(UUID qConsID, String heartbeatTopicName) throws Exception {
 		
 		//Wait first to give consumer time to stop

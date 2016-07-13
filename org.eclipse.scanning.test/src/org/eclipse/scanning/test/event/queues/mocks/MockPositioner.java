@@ -12,6 +12,7 @@ public class MockPositioner implements IPositioner {
 	
 	private IPosition pos;
 	private boolean aborted;
+	private Boolean moveComplete;
 
 	@Override
 	public void addPositionListener(IPositionListener listener) {
@@ -28,23 +29,19 @@ public class MockPositioner implements IPositioner {
 	@Override
 	public boolean setPosition(IPosition position) throws ScanningException,
 			InterruptedException {
-		try {
-			Thread.sleep(2000);
-		} catch(InterruptedException ex) {
-			//This might well happen...
-		}
+		
+		moveComplete = false;
+		Thread.sleep(400);
 		
 		//This is to test positioning failing.
-		if(position.getNames().contains("BadgerApocalypseButton") && position.get("BadgerApocalypseButton").equals("pushed")) {
-			throw new ScanningException("The badger apocalypse cometh!");
+		if (position.getNames().contains("BadgerApocalypseButton") && position.get("BadgerApocalypseButton").equals("pushed")) {
+			throw new ScanningException("The badger apocalypse cometh! (EXPECTED - we pressed the button...)");
 		}
 		
 		pos = position;
-		try {
-			Thread.sleep(2500);
-		} catch(InterruptedException ex) {
-			//This might well happen...
-		}
+		Thread.sleep(450);
+		
+		moveComplete = true;
 		return true;
 	}
 
@@ -79,6 +76,10 @@ public class MockPositioner implements IPositioner {
 	
 	public boolean isAborted() {
 		return aborted;
+	}
+	
+	public boolean isMoveComplete() {
+		return moveComplete;
 	}
 
 }

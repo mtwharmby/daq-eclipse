@@ -18,16 +18,18 @@ import org.eclipse.scanning.api.event.queues.beans.QueueAtom;
 import org.eclipse.scanning.api.event.queues.beans.QueueBean;
 import org.eclipse.scanning.event.queues.HeartbeatMonitor;
 import org.eclipse.scanning.event.queues.QueueServicesHolder;
-import org.eclipse.scanning.test.event.queues.mocks.DummyAtom;
-import org.eclipse.scanning.test.event.queues.mocks.DummyBean;
+import org.eclipse.scanning.test.event.queues.dummy.DummyAtom;
+import org.eclipse.scanning.test.event.queues.dummy.DummyBean;
 import org.eclipse.scanning.test.event.queues.mocks.MockQueue;
 import org.eclipse.scanning.test.event.queues.mocks.MockQueueService;
-import org.eclipse.scanning.test.event.queues.util.EventServiceActorMaker;
+import org.eclipse.scanning.test.event.queues.util.EventInfrastructureFactoryService;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 public class HeartbeatMonitorTest {
+	
+	private EventInfrastructureFactoryService infrastructureServ;
 	
 	private IConsumer<QueueBean> consOne;
 	private IConsumer<QueueAtom >consTwo;
@@ -40,13 +42,16 @@ public class HeartbeatMonitorTest {
 	private URI uri;
 	
 	@Before
-	public void setUp() {
-		consOne = EventServiceActorMaker.makeConsumer(new DummyBean(), true);
+	public void setUp() throws Exception {
+		infrastructureServ = new EventInfrastructureFactoryService();
+		infrastructureServ.start(true);
+		
+		consOne = infrastructureServ.makeConsumer(new DummyBean(), true);
 		consOneID = consOne.getConsumerId();
-		uri = EventServiceActorMaker.getURI();
+		uri = infrastructureServ.getURI();
 		
 		//This is not a plugin-test - need to supply the EventService
-		QueueServicesHolder.setEventService(EventServiceActorMaker.getEventService());
+		QueueServicesHolder.setEventService(infrastructureServ.getEventService());
 	}
 	
 	@After
@@ -200,13 +205,13 @@ public class HeartbeatMonitorTest {
 		
 	}
 	
-	private void createSecondConsumer() {
-		consTwo = EventServiceActorMaker.makeConsumer(new DummyAtom(), true);
+	private void createSecondConsumer() throws Exception {
+		consTwo = infrastructureServ.makeConsumer(new DummyAtom(), true);
 		consTwoID = consTwo.getConsumerId();
 		assertFalse("IDs of two consumers are identical", consTwoID.equals(consOneID));
 	}
 	
-	private void createTwoQueues() {
+	private void createTwoQueues() throws Exception {
 		createSecondConsumer();
 		mockOne = new MockQueue<>("MockQueueOne", consOne);
 		mockTwo = new MockQueue<>("MockQueueTwo", consTwo);
