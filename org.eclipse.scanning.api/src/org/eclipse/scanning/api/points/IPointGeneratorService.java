@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 
+import org.eclipse.scanning.api.points.models.CompoundModel;
 import org.eclipse.scanning.api.points.models.IScanPathModel;
 
 /**
@@ -38,7 +39,7 @@ public interface IPointGeneratorService {
 	 * @param model
 	 * @return
 	 */
-	default <T extends IScanPathModel,P extends IPosition> IPointGenerator<T,P> createGenerator(T model) throws GeneratorException {
+	default <T extends IScanPathModel> IPointGenerator<T> createGenerator(T model) throws GeneratorException {
 		return createGenerator(model, Collections.emptyList());
 	}
 
@@ -51,7 +52,7 @@ public interface IPointGeneratorService {
 	 * @param region a reference to an IROI for instance
 	 * @return
 	 */
-	default <T extends IScanPathModel,R,P extends IPosition> IPointGenerator<T,P> createGenerator(T model, R region) throws GeneratorException {
+	default <T extends IScanPathModel,R> IPointGenerator<T> createGenerator(T model, R region) throws GeneratorException {
 		return createGenerator(model, Arrays.asList(region));
 	}
 
@@ -61,7 +62,7 @@ public interface IPointGeneratorService {
 	 * @param regions a reference to zero or more IROIs for instance
 	 * @return
 	 */
-	<T extends IScanPathModel,R,P extends IPosition> IPointGenerator<T,P> createGenerator(T model, Collection<R> regions) throws GeneratorException;
+	<T extends IScanPathModel,R> IPointGenerator<T> createGenerator(T model, Collection<R> regions) throws GeneratorException;
 
 	/**
 	 * Create a nested or compound generator.
@@ -71,7 +72,25 @@ public interface IPointGeneratorService {
 	 * @return
 	 * @throws GeneratorException
 	 */
-	IPointGenerator<?,IPosition> createCompoundGenerator(IPointGenerator<?,?>... generators) throws GeneratorException;
+	IPointGenerator<?> createCompoundGenerator(IPointGenerator<?>... generators) throws GeneratorException;
+	
+	/**
+	 * Create a nested or compound generator from a list of models.
+	 * 
+	 * @param cmodel
+	 * @return
+	 * @throws GeneratorException
+	 */
+	IPointGenerator<?> createCompoundGenerator(CompoundModel cmodel) throws GeneratorException;
+
+	/**
+	 * 
+	 * @param cmodel
+	 * @param models
+	 * @return
+	 * @throws GeneratorException
+	 */
+	<R> Collection<R> findRegions(CompoundModel cmodel, IScanPathModel models) throws GeneratorException;
 
 	/**
 	 * Each IPointGenerator must have a unique id which is used to refer to it in the user interface.
@@ -87,5 +106,5 @@ public interface IPointGeneratorService {
 	 * @param id
 	 * @return
 	 */
-	<T extends IScanPathModel, P extends IPosition> IPointGenerator<T,P> createGenerator(String id) throws GeneratorException;
+	<T extends IScanPathModel> IPointGenerator<T> createGenerator(String id) throws GeneratorException;
 }

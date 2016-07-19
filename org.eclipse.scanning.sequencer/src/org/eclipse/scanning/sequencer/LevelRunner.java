@@ -1,24 +1,28 @@
 package org.eclipse.scanning.sequencer;
 
+import java.lang.ref.SoftReference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import org.eclipse.scanning.api.ILevel;
 import org.eclipse.scanning.api.INameable;
+import org.eclipse.scanning.api.annotation.scan.LevelEnd;
+import org.eclipse.scanning.api.annotation.scan.LevelStart;
 import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.points.MapPosition;
+import org.eclipse.scanning.api.scan.LevelInformation;
 import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.api.scan.event.IPositionListener;
 import org.eclipse.scanning.api.scan.event.PositionDelegate;
@@ -41,10 +45,11 @@ abstract class LevelRunner<L extends ILevel> {
 	
 	private static Logger logger = LoggerFactory.getLogger(LevelRunner.class);
 
-    protected IPosition        position;
-    private ExecutorService    eservice;
-	private ScanningException  abortException;
-	private PositionDelegate   pDelegate;
+    protected IPosition                 position;
+    private volatile ExecutorService    eservice; // Different threads may nullify the service, better to make volatile.
+	private ScanningException           abortException;
+	private PositionDelegate            pDelegate;
+	private boolean                     levelCachingAllowed=true;
 	
 	protected LevelRunner() {
 		pDelegate = new PositionDelegate();
@@ -54,7 +59,7 @@ abstract class LevelRunner<L extends ILevel> {
 	 * Get a list of the objects which we would like to order by level.
 	 * @return
 	 */
-	protected abstract Collection<L> getObjects() throws ScanningException ;
+	protected abstract Collection<L> getDevices() throws ScanningException ;
 
 	/**
 	 * Implement this method to create a callable which willbe run by the executor service.
@@ -98,7 +103,8 @@ abstract class LevelRunner<L extends ILevel> {
 		boolean ok = pDelegate.firePositionWillPerform(position);
         if (!ok) return false;
 		
-		Map<Integer, List<L>> positionMap = getLevelOrderedObjects(getObjects());
+		Map<Integer, List<L>> positionMap = getLevelOrderedDevices(getDevices());
+		Map<Integer, AnnotationManager> managerMap = getLevelOrderedManagerMap(positionMap);
 		
 		try {
 			// TODO Should we actually create the service size to the size
@@ -119,14 +125,23 @@ abstract class LevelRunner<L extends ILevel> {
 					if (c==null) continue; // legal to say that there is nothing to do for a given object.
 					tasks.add(c);
 				}
+				
+				managerMap.get(level).invoke(LevelStart.class, position, new LevelInformation(level, lobjects));
 				if (!it.hasNext() && !block) { 
 					// The last one and we are non-blocking
 					for (Callable<IPosition> callable : tasks) eservice.submit(callable);
 				} else {
 					// Normally we block until done.
-				    List<Future<IPosition>> pos = eservice.invokeAll(tasks); // blocks until level has run
-					pDelegate.fireLevelPerformed(level, lobjects, getPosition(pos));
+					// Blocks until level has run
+				    List<Future<IPosition>> pos = eservice.invokeAll(tasks, getTimeout(lobjects), TimeUnit.SECONDS);
+				    
+				    // If timed out, some isDone will be false.
+				    for (Future<IPosition> future : pos) {
+						if (!future.isDone()) throw new ScanningException("The timeout of "+timeout+"s has been reached waiting for level "+level+" objects "+toString(lobjects));
+					}
+				    pDelegate.fireLevelPerformed(level, lobjects, getPosition(position, pos));
 				}
+				managerMap.get(level).invoke(LevelEnd.class, position, new LevelInformation(level, lobjects));
 			}
 			
 			pDelegate.firePositionPerformed(finalLevel, position);
@@ -141,15 +156,27 @@ abstract class LevelRunner<L extends ILevel> {
 			
 		} finally {
 			if (block) {
-				if (eservice != null) { // may have already aborted
-					eservice.shutdownNow();
-					eservice = null;
-				}
+				if (eservice!=null) eservice.shutdownNow();
+				eservice = null;
 			}
 		}
 		
 		return true;
 	}
+
+	protected String toString(List<L> lobjects) {
+		final  StringBuilder buf = new StringBuilder("[");
+		for (L l : lobjects) {
+			buf.append(l);
+			buf.append(", ");
+		}
+		return buf.toString();
+	}
+
+	/**
+	 * The timeout is overridden by some subclasses.
+	 */
+	private long timeout = 10;
 
 	/** 
 	 * Blocks until all the tasks have complete. In order for this call to be worth
@@ -162,8 +189,8 @@ abstract class LevelRunner<L extends ILevel> {
 	 * 
 	 * @throws InterruptedException 
 	 */
-	protected void await() throws InterruptedException {
-        await(1, TimeUnit.MINUTES);// FIXME Does this need spring config?
+	protected void await() throws InterruptedException, ScanningException {
+        await(getTimeout(null));
 	}
 	
 	/** 
@@ -175,12 +202,19 @@ abstract class LevelRunner<L extends ILevel> {
 	 * 
 	 * @throws InterruptedException 
 	 */
-	protected void await(long time, TimeUnit unit) throws InterruptedException {
-		if (eservice==null)          return;
-		if (eservice.isTerminated()) return;
-		eservice.shutdown();
-		eservice.awaitTermination(time, unit); 
-		eservice = null;
+	protected void await(long time) throws InterruptedException, ScanningException{
+		try {
+			if (eservice==null)          return;
+			if (eservice.isTerminated()) return;
+			eservice.shutdown();
+			eservice.awaitTermination(time, TimeUnit.SECONDS); 
+			if (!eservice.isTerminated()) {
+				eservice.shutdownNow();
+			    throw new ScanningException("The timeout of "+timeout+"s has been reached, scan aborting. Please implement ITimeoutable to define how long your device needs to write.");
+			}
+		} finally {
+		    eservice = null;
+		}
 	}
 	
 	public void abort() {
@@ -212,17 +246,19 @@ abstract class LevelRunner<L extends ILevel> {
 		abortException = null;
 	}
 
+	private SoftReference<Map> sortedObjects;
 	/**
 	 * Get the scannables, ordered by level, lowest first
 	 * @param position
 	 * @return
 	 * @throws ScanningException 
 	 */
-	protected Map<Integer, List<L>> getLevelOrderedObjects(final Collection<L> objects) throws ScanningException {
+	protected Map<Integer, List<L>> getLevelOrderedDevices(final Collection<L> objects) throws ScanningException {
 		
 		if (objects==null) return Collections.emptyMap();
 		
-		// TODO It is necessary to cache this map for speed?
+		if (sortedObjects!=null && sortedObjects.get()!=null) return sortedObjects.get();
+		
 		final Map<Integer, List<L>> ret = new TreeMap<>();
 		for (L object : objects) {
 			final int level = object.getLevel();
@@ -230,19 +266,33 @@ abstract class LevelRunner<L extends ILevel> {
 			if (!ret.containsKey(level)) ret.put(level, new ArrayList<L>(7));
 			ret.get(level).add(object);
 		}
+		if (isLevelCachingAllowed()) sortedObjects = new SoftReference<Map>(ret);
 		
 		return ret;
 	}
+	
+	private SoftReference<Map> sortedManagers;
+
+	private Map<Integer, AnnotationManager> getLevelOrderedManagerMap(Map<Integer, List<L>> positionMap) {
+		
+		if (sortedManagers!=null && sortedManagers.get()!=null) return sortedManagers.get();
+
+		final Map<Integer, AnnotationManager> ret = new HashMap<>();
+		for (Integer position : positionMap.keySet()) {
+			ret.put(position, new AnnotationManager(LevelStart.class, LevelEnd.class));	// Less annotations is more efficient
+			ret.get(position).addDevices(positionMap.get(position));
+		}
+		if (isLevelCachingAllowed()) sortedManagers = new SoftReference<Map>(ret);
+		return ret;
+	}
+
 
 	protected ExecutorService createService() {
 		// TODO Need spring config for this.
-		int processors = Runtime.getRuntime().availableProcessors();
-		return new ThreadPoolExecutor(processors,             /* number of motors to move at the same time. */
-						              processors*2,                                 /* max size current tasks. */
-						              1, TimeUnit.SECONDS,                          /* timeout after - does this need spring config? */
-						              new ArrayBlockingQueue<Runnable>(1000, true), /* max 1000+ncores motors to a level */
-						              new ThreadPoolExecutor.AbortPolicy());
-
+		Integer processors = Integer.getInteger("org.eclipse.scanning.level.runner.pool.count");
+		if (processors==null || processors<0) processors = Runtime.getRuntime().availableProcessors();
+		return new ForkJoinPool(processors);
+        // Slightly faster than thread pool executor @see ScanAlgorithmBenchMarkTest
 	}
 
 	public void addPositionListener(IPositionListener listener) {
@@ -257,12 +307,16 @@ abstract class LevelRunner<L extends ILevel> {
 		return position;
 	}
 
-	private IPosition getPosition(List<Future<IPosition>> futures) throws InterruptedException, ExecutionException {
-	    IPosition ret = new MapPosition();
+	private IPosition getPosition(IPosition position, List<Future<IPosition>> futures) throws InterruptedException, ExecutionException {
+		MapPosition ret = new MapPosition();
 	    for (Future<IPosition> future : futures) {
+	    	// Faster than using composite
 	    	IPosition pos = future.get();
-	    	ret = ret.composite(pos);
+	    	if (pos==null) continue;
+	    	ret.putAll(pos);
+	    	ret.putAllIndices(pos);
 		}
+	    if (ret.size()<1) return position;
 	    return ret;
 	}
 
@@ -274,12 +328,12 @@ abstract class LevelRunner<L extends ILevel> {
 				return true;
 			}
 			@Override
-			protected void await(long time, TimeUnit unit) throws InterruptedException {
+			protected void await(long time) throws InterruptedException {
 				return;
 			}
 
 			@Override
-			protected Collection<T> getObjects() throws ScanningException {
+			protected Collection<T> getDevices() throws ScanningException {
 				return null;
 			}
 
@@ -289,6 +343,31 @@ abstract class LevelRunner<L extends ILevel> {
 			}
 			
 		};
+	}
+
+	/**
+	 * The await and maximum run time in seconds.
+	 * @param the objects at this level. If null then the maximum of all possible objects in the runner should be used.
+	 * @return
+	 */
+	public long getTimeout(List<L> objects) {
+		return timeout;
+	}
+
+	/**
+	 * The await time in sceonds.
+	 * @return time
+	 */
+	public void setTimeout(long time) {
+		this.timeout = time;
+	}
+
+	public boolean isLevelCachingAllowed() {
+		return levelCachingAllowed;
+	}
+
+	public void setLevelCachingAllowed(boolean levelCachingAllowed) {
+		this.levelCachingAllowed = levelCachingAllowed;
 	}
 
 }

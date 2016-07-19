@@ -25,15 +25,19 @@ import org.eclipse.scanning.api.malcolm.IMalcolmConnection;
 import org.eclipse.scanning.api.malcolm.IMalcolmService;
 import org.eclipse.scanning.api.malcolm.MalcolmDeviceException;
 import org.eclipse.scanning.api.malcolm.models.MalcolmConnectionInfo;
-import org.eclipse.scanning.api.malcolm.models.MalcolmDetectorModel;
+import org.eclipse.scanning.api.malcolm.models.MalcolmDetectorConfiguration;
 import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.api.scan.event.IPositioner;
 import org.eclipse.scanning.api.scan.models.ScanModel;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("rawtypes")
 public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
+	
+	private static final Logger logger = LoggerFactory.getLogger(RunnableDeviceServiceImpl.class);
 	
 	/**
 	 * The default Malcolm Hostname can be injected by spring. Otherwise
@@ -114,7 +118,9 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 				if (e.getName().equals("device")) {
 					
 					final IRunnableDevice device = (IRunnableDevice)e.createExecutableExtension("class");
-					device.setName(e.getAttribute("name"));
+					String name = e.getAttribute("name");
+					if (name == null) name = e.getAttribute("id");
+					device.setName(name);
 					devs.put(mod.getClass(), device.getClass());
 					
 					if (device instanceof AbstractRunnableDevice) {
@@ -209,6 +215,7 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 	@Override
 	public <T> IRunnableDevice<T> getRunnableDevice(String name, IPublisher<ScanBean> publisher) throws ScanningException {
 		
+		@SuppressWarnings("unchecked")
 		IRunnableDevice<T> device = (IRunnableDevice<T>)namedDevices.get(name);
 		if (device!=null && publisher!=null && device instanceof AbstractRunnableDevice) {
 			AbstractRunnableDevice<T> adevice = (AbstractRunnableDevice<T>)device;
@@ -217,12 +224,12 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 		return device;
 	}
 	
-	private <T> IRunnableDevice createDevice(T model) throws ScanningException, InstantiationException, IllegalAccessException, URISyntaxException, UnknownHostException {
+	private <T> IRunnableDevice<T> createDevice(T model) throws ScanningException, InstantiationException, IllegalAccessException, URISyntaxException, UnknownHostException {
 		
 		final IRunnableDevice<T> scanner;
 		
-		if (model instanceof MalcolmDetectorModel) {
-			MalcolmConnectionInfo info = ((MalcolmDetectorModel) model).getConnectionInfo();
+		if (model instanceof MalcolmDetectorConfiguration) {
+			MalcolmConnectionInfo info = ((MalcolmDetectorConfiguration) model).getConnectionInfo();
 			URI            uri = createMalcolmURI(info);
 			IMalcolmConnection conn = connections.get(uri);
 			if (conn==null || !conn.isConnected()) {
@@ -232,6 +239,7 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 			return conn.getDevice(info.getDeviceName());
 			
 		} else if (modelledDevices.containsKey(model.getClass())) {
+			@SuppressWarnings("unchecked")
 			final Class<IRunnableDevice<T>> clazz = (Class<IRunnableDevice<T>>)modelledDevices.get(model.getClass());
 			if (clazz == null) throw new ScanningException("The model '"+model.getClass()+"' does not have a device registered for it!");
 			scanner = clazz.newInstance();
@@ -264,7 +272,8 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 		return new URI(buf.toString());
 	}
 
-	public static IDeviceConnectorService getDeviceConnectorService() {
+	@Override
+	public IDeviceConnectorService getDeviceConnectorService() {
 		return deviceConnectorService;
 	}
 
@@ -284,8 +293,8 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 			try {
 				connections.get(uri).dispose();
 			} catch (MalcolmDeviceException e) {
-				System.out.println("Problem closing malcolm connection to "+uri);
 				e.printStackTrace();
+				logger.error("Problem closing malcolm connection to "+uri, e);
 			}
 		}
 	}

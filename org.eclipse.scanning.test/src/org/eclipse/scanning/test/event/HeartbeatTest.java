@@ -14,15 +14,17 @@ import org.eclipse.scanning.api.event.alive.HeartbeatEvent;
 import org.eclipse.scanning.api.event.alive.IHeartbeatListener;
 import org.eclipse.scanning.api.event.core.IPublisher;
 import org.eclipse.scanning.api.event.core.ISubscriber;
+import org.eclipse.scanning.event.Constants;
 import org.eclipse.scanning.event.EventServiceImpl;
 import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
+import org.eclipse.scanning.test.BrokerTest;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import uk.ac.diamond.daq.activemq.connector.ActivemqConnectorService;
 
-public class HeartbeatTest {
+public class HeartbeatTest extends BrokerTest {
 
 	private IEventService                   eservice;
 	private IPublisher<HeartbeatBean>       publisher;
@@ -31,6 +33,9 @@ public class HeartbeatTest {
 	@Before
 	public void createServices() throws Exception {
 		
+		Constants.setNotificationFrequency(100);
+		Constants.setTimeout(500);
+
 		// We wire things together without OSGi here 
 		// DO NOT COPY THIS IN NON-TEST CODE!
 		ActivemqConnectorService.setJsonMarshaller(new MarshallerService(new PointsModelMarshaller()));
@@ -38,7 +43,6 @@ public class HeartbeatTest {
 		
 		// Use in memory broker removes requirement on network and external ActiveMQ process
 		// http://activemq.apache.org/how-to-unit-test-jms-code.html
-		final URI uri = new URI("vm://localhost?broker.persistent=false");
 		
 		// We use the long winded constructor because we need to pass in the connector.
 		// In production we would normally 
@@ -49,17 +53,17 @@ public class HeartbeatTest {
 	@After
 	public void dispose() throws EventException {
 		publisher.disconnect();
+		Constants.setNotificationFrequency(2000);
+		Constants.setTimeout(Constants.TIMEOUT);
 	}
 
 
 	@Test
 	public void blindHeartbeatTest() throws Exception {
 
-		System.setProperty("org.eclipse.scanning.event.heartbeat.freq",    String.valueOf(1000));
-		System.setProperty("org.eclipse.scanning.event.heartbeat.timeout", String.valueOf(5000));
 		publisher.setAlive(true);
 
-		Thread.sleep(10000);
+		Thread.sleep(1000);
 
 		if (!publisher.isAlive()) throw new Exception("Heartbeat should still be being published!");
 
@@ -73,12 +77,10 @@ public class HeartbeatTest {
 	@Test
 	public void checkedHeartbeatTest() throws Exception {
 
-		System.setProperty("org.eclipse.scanning.event.heartbeat.freq",    String.valueOf(1000));
-		System.setProperty("org.eclipse.scanning.event.heartbeat.timeout", String.valueOf(5000));
 		publisher.setAlive(true);
 		
 		final List<HeartbeatBean> gotBack = new ArrayList<>(3);
-		subscriber.addListener(new IHeartbeatListener.Stub() {
+		subscriber.addListener(new IHeartbeatListener() {
 			@Override
 			public void heartbeatPerformed(HeartbeatEvent evt) {
 				gotBack.add(evt.getBean());
@@ -86,7 +88,7 @@ public class HeartbeatTest {
 			}
 		});
 
-		Thread.sleep(10000);
+		Thread.sleep(2000);
 
 		if (!publisher.isAlive()) throw new Exception("Heartbeat should still be being published!");
 
@@ -101,8 +103,6 @@ public class HeartbeatTest {
 	@Test
 	public void timeoutHeartbeatTest() throws Exception {
 
-		System.setProperty("org.eclipse.scanning.event.heartbeat.freq",    String.valueOf(1000));
-		System.setProperty("org.eclipse.scanning.event.heartbeat.timeout", String.valueOf(5000));
 		try {
 			final URI uri = new URI("tcp://rubbish:5600");	
 			publisher = eservice.createPublisher(uri, IEventService.HEARTBEAT_TOPIC);

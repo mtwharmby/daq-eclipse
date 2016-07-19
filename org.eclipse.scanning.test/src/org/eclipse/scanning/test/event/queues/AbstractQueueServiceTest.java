@@ -1,15 +1,11 @@
 package org.eclipse.scanning.test.event.queues;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -17,28 +13,32 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.eclipse.scanning.api.event.EventException;
-import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.event.alive.HeartbeatBean;
-import org.eclipse.scanning.api.event.alive.HeartbeatEvent;
-import org.eclipse.scanning.api.event.alive.IHeartbeatListener;
 import org.eclipse.scanning.api.event.bean.BeanEvent;
 import org.eclipse.scanning.api.event.bean.IBeanListener;
 import org.eclipse.scanning.api.event.core.IConsumer;
 import org.eclipse.scanning.api.event.core.ISubscriber;
+import org.eclipse.scanning.api.event.queues.IHeartbeatMonitor;
 import org.eclipse.scanning.api.event.queues.IQueue;
 import org.eclipse.scanning.api.event.queues.IQueueService;
-import org.eclipse.scanning.api.event.queues.QueueNameMap;
 import org.eclipse.scanning.api.event.queues.QueueStatus;
 import org.eclipse.scanning.api.event.queues.beans.QueueAtom;
 import org.eclipse.scanning.api.event.queues.beans.QueueBean;
 import org.eclipse.scanning.api.event.queues.beans.Queueable;
-import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.event.status.Status;
 import org.eclipse.scanning.api.event.status.StatusBean;
-import org.eclipse.scanning.test.event.queues.mocks.AllBeanQueueProcessCreator;
-import org.eclipse.scanning.test.event.queues.mocks.DummyAtom;
-import org.eclipse.scanning.test.event.queues.mocks.DummyBean;
+import org.eclipse.scanning.event.Constants;
+import org.eclipse.scanning.event.queues.HeartbeatMonitor;
+import org.eclipse.scanning.event.queues.QueueProcessCreator;
+import org.eclipse.scanning.event.queues.QueueProcessorFactory;
+import org.eclipse.scanning.test.event.queues.dummy.DummyAtom;
+import org.eclipse.scanning.test.event.queues.dummy.DummyAtomProcessor;
+import org.eclipse.scanning.test.event.queues.dummy.DummyBean;
+import org.eclipse.scanning.test.event.queues.dummy.DummyBeanProcessor;
+import org.eclipse.scanning.test.event.queues.util.EventInfrastructureFactoryService;
 import org.junit.After;
+import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 /**
@@ -54,15 +54,38 @@ import org.junit.Test;
 
 
 
-public class AbstractQueueServiceTest {
+public abstract class AbstractQueueServiceTest {
+	
 	protected IQueueService qServ;
 	protected static String qRoot;
-	protected static URI uri;
+	protected EventInfrastructureFactoryService infrastructureServ;
+	protected URI uri;
 	
-	@After
-	public void cleanup() throws Exception{
-		qServ.disposeService();
+	@BeforeClass
+	public static void setupClass() {
+		qRoot = "uk.ac.diamond.i15-1";
 	}
+	
+	@Before
+	public void setup() throws Exception {
+		Constants.setNotificationFrequency(200);
+		QueueProcessorFactory.registerProcessor(DummyAtomProcessor.class);
+		QueueProcessorFactory.registerProcessor(DummyBeanProcessor.class);
+		
+		localSetup();
+	}
+	
+	protected abstract void localSetup() throws Exception;
+
+	@After
+	public void stop() throws Exception{
+		qServ.disposeService();
+		localTearDown();
+		
+		Constants.setNotificationFrequency(2000);
+	}
+	
+	protected abstract void localTearDown() throws Exception;
 	
 	@Test
 	public void testServiceStartStop() throws Exception {
@@ -88,20 +111,19 @@ public class AbstractQueueServiceTest {
 			//Start the service (and job queue), check status & whether queue is alive
 			qServ.start();
 			assertEquals("Job queue state is incorrect", QueueStatus.STARTED, qServ.getQueueStatus(jqID));
-			Thread.sleep(2500);//This has been optimised
+			Thread.sleep(300);//This has been optimised
 			beats = jobQueue.getLatestHeartbeats();
 			final int livingSize = beats.size();
-			assertTrue("Queue has no heartbeat after starting", livingSize > 0);
 
 			//Submit a bean, let the queue part run it and then stop it.
 			qServ.jobQueueSubmit(beans[i]);
-			Thread.sleep(1000);
 			if (i == 0) {
+				Thread.sleep(200);
 				qServ.stop(false);
 				assertEquals("Active queue state is incorrect", QueueStatus.STOPPED, qServ.getQueueStatus(jqID));
 				
 				//Wait to see if the queue is still alive & check the state of the bean at the end
-				Thread.sleep(1500);//FIXME This can be optimised by using a Subscriber/listener
+				waitForBeanFinalState(beans[i], jobQueue.getConsumer(), 5000);
 				beats = jobQueue.getLatestHeartbeats();
 				final int sizeAtStop = beats.size();
 				assertTrue("Queue had no heart beat during its lifetime", livingSize < sizeAtStop);
@@ -111,7 +133,7 @@ public class AbstractQueueServiceTest {
 				assertEquals("Active queue state is incorrect", QueueStatus.KILLED, qServ.getQueueStatus(jqID));
 				
 				//Kill should disconnect the consumer.
-				checkForShutdownConsumer(jobQueue.getConsumerID(), jobQueue.getQueueNames());
+				checkForShutdownConsumer(jobQueue.getConsumerID(), jobQueue.getHeartbeatTopicName());
 			}
 		}
 		
@@ -190,20 +212,20 @@ public class AbstractQueueServiceTest {
 			//Start the service (and job queue), check status & whether queue is alive
 			qServ.startActiveQueue(aqID);
 			assertEquals("Active queue state is incorrect", QueueStatus.STARTED, qServ.getQueueStatus(aqID));
-			Thread.sleep(2500);//This has been optimised
+			Thread.sleep(500);//This has been optimised
 			beats = activeQueue.getLatestHeartbeats();
 			final int livingSize = beats.size();
 			assertTrue("Queue has no heartbeat after starting", livingSize > 0);
 
 			//Submit a bean, let the queue part run it and then stop it.
 			qServ.activeQueueSubmit(atoms[i], aqID);
-			Thread.sleep(1000);
 			if (i == 0) {
+				Thread.sleep(200);//TODO
 				qServ.stopActiveQueue(aqID, false);
 				assertEquals("Active queue state is incorrect", QueueStatus.STOPPED, qServ.getQueueStatus(aqID));
 
 				//Wait to see if the queue is still alive & check the state of the bean at the end
-				pauseForFinalStatus(7000);
+				waitForBeanFinalState(atoms[0], qServ.getActiveQueue(aqID).getConsumer(), 5000);
 				
 				beats = activeQueue.getLatestHeartbeats();
 				final int sizeAtStop = beats.size();
@@ -214,7 +236,7 @@ public class AbstractQueueServiceTest {
 				assertEquals("Active queue state is incorrect", QueueStatus.KILLED, qServ.getQueueStatus(aqID));
 
 				//Kill should disconnect the consumer.
-				checkForShutdownConsumer(activeQueue.getConsumerID(), activeQueue.getQueueNames());
+				checkForShutdownConsumer(activeQueue.getConsumerID(), activeQueue.getHeartbeatTopicName());
 			}
 		}
 		
@@ -238,8 +260,7 @@ public class AbstractQueueServiceTest {
 		qServ.activeQueueSubmit(atomB, aqID);
 		qServ.startActiveQueue(aqID);
 		UUID aqConsID = qServ.getActiveQueue(aqID).getConsumerID();
-		QueueNameMap aqNames = qServ.getJobQueue().getQueueNames();
-		Thread.sleep(1000);
+		Thread.sleep(300);//TODO
 		try {
 			qServ.disposeQueue(aqID, false);
 			fail("Shouldn't be able to dispose a running queue.");
@@ -249,13 +270,12 @@ public class AbstractQueueServiceTest {
 		
 		qServ.stopActiveQueue(aqID, false);
 		qServ.disposeQueue(aqID, false);
-		Thread.sleep(1000);
 		
 		assertTrue("queue ID not found in registry!", qServ.getAllActiveQueues().containsKey(aqID));
 		assertEquals("Job queue has wrong state", QueueStatus.DISPOSED, qServ.getQueueStatus(aqID));
 		assertFalse("Consumer should not be active", qServ.getActiveQueue(aqID).getConsumer().isActive());
 
-		checkForShutdownConsumer(aqConsID, aqNames);
+		checkForShutdownConsumer(aqConsID, qServ.getHeartbeatTopicName());
 	}
 	
 	@Test
@@ -268,10 +288,10 @@ public class AbstractQueueServiceTest {
 		qServ.activeQueueSubmit(atomA, aqID);
 		qServ.activeQueueSubmit(atomB, aqID);
 		qServ.startActiveQueue(aqID);
-		Thread.sleep(1000);
+		Thread.sleep(200);
 		
 		qServ.killQueue(aqID, false, false); //Need to set disconnect false to allow post-match analysis!
-		Thread.sleep(4000);//FIXME This has been optimised. Might be able to improve with a Subscriber/Listener?
+		waitForBeanFinalState(atomA, qServ.getActiveQueue(aqID).getConsumer(), 5000);
 		
 		assertTrue("queue ID not found in registry!", qServ.getAllActiveQueues().containsKey(aqID));
 		assertEquals("Job queue has wrong state", QueueStatus.KILLED, qServ.getQueueStatus(aqID));
@@ -340,12 +360,12 @@ public class AbstractQueueServiceTest {
 		
 		//Submit a bean to the queue and allow it to start processing
 		qServ.jobQueueSubmit(bean);
-		Thread.sleep(1500);
+		Thread.sleep(250);  //This is optimised//TODO
 		
 		//Request termination
 		bean.setStatus(Status.REQUEST_TERMINATE);
 		qServ.jobQueueTerminate(bean);
-		pauseForFinalStatus(5000);
+		waitForBeanFinalState(bean, qServ.getJobQueue().getConsumer(), 5000);
 		
 		//Check it has terminated
 		checkProcessFinalStatus(bean, jqID, Status.TERMINATED);
@@ -356,12 +376,12 @@ public class AbstractQueueServiceTest {
 		
 		//Submit an atom to the queue and allow it to start processing
 		qServ.activeQueueSubmit(atom, aqID);
-		Thread.sleep(1500);
+		Thread.sleep(250); //This is optimised
 
 		//Request termination
 		atom.setStatus(Status.REQUEST_TERMINATE);
 		qServ.activeQueueTerminate(atom, aqID);
-		pauseForFinalStatus(5000);
+		waitForBeanFinalState(atom, qServ.getActiveQueue(aqID).getConsumer(), 5000);
 
 		//Check it has terminated
 		checkProcessFinalStatus(atom, aqID, Status.TERMINATED);
@@ -389,13 +409,13 @@ public class AbstractQueueServiceTest {
 		
 		//Change the jobQueueProcessor or the activeQueueProcessor
 		try {
-			qServ.setJobQueueProcessor(new AllBeanQueueProcessCreator<QueueBean>(false));
+			qServ.setJobQueueProcessor(new QueueProcessCreator<QueueBean>(false));
 			fail("Shouldn't be able to change the queue processor whilst service is started.");
 		} catch (EventException e) {
 			//expected
 		}
 		try {
-			qServ.setActiveQueueProcessor(new AllBeanQueueProcessCreator<QueueAtom>(false));
+			qServ.setActiveQueueProcessor(new QueueProcessCreator<QueueAtom>(false));
 			fail("Shouldn't be able to change the queue processor whilst service is started.");
 		} catch (EventException e) {
 			//expected
@@ -410,8 +430,30 @@ public class AbstractQueueServiceTest {
 		assertTrue("Active queue reported not registered", qServ.isActiveQueueRegistered(aqID));
 	}
 	
+	@Test
+	public void testChangeQueueRootChangesControlTopics() throws Exception {
+		final String initHeartbeatT = qServ.getHeartbeatTopicName();
+		final String initCmdT = qServ.getCommandTopicName();
+		
+		String newQRoot = "uk.ac.diamond.i15-1.differentTest";
+		qServ.setQueueRoot(newQRoot);
+		
+		assertFalse("Heartbeat topic name not changed", qServ.getHeartbeatTopicName().equals(initHeartbeatT));
+		assertFalse("Command topic name not changed", qServ.getCommandTopicName().equals(initCmdT));
+		
+		assertEquals("Heartbeat topic has an unexpected name", newQRoot + IQueueService.HEARTBEAT_TOPIC_SUFFIX, qServ.getHeartbeatTopicName());
+		assertEquals("Command topic has an unexpected name", newQRoot+IQueueService.COMMAND_TOPIC_SUFFIX, qServ.getCommandTopicName());
+	}
+	
 	protected void checkProcessFinalStatus(Queueable bean, String queueID, Status expected) throws Exception {
 		List<? extends Queueable> statusSet = qServ.getStatusSet(queueID);
+		int i = 0;
+		while (statusSet.size() == 0) {
+			Thread.sleep(50);
+			statusSet = qServ.getStatusSet(queueID);
+			i=i+50;
+			if (i >= 1000) fail("No beans reported in status set while waiting for final status.");
+		}
 		StatusBean complete = statusSet.get(0);
 		checkBeanFinalStatus(bean, complete, expected);
 	}
@@ -420,67 +462,76 @@ public class AbstractQueueServiceTest {
 		if (expected.equals(Status.SUBMITTED)) {
 			assertEquals("Submitted and completed beans are different!", bean, complete);
 		} else {
-		assertThat("Submitted bean and complete bean are identical!", bean, is(not(complete)));
+			assertTrue("Submitted bean and complete bean are identical!", !bean.equals(complete));
 		}
 		assertEquals("The bean in the queue has the wrong final state!", expected, complete.getStatus());
 		if (expected.equals(Status.COMPLETE)) {
-			assertThat("The percent complete is not 100!", complete.getPercentComplete(), is(100));
+			assertTrue("The percent complete is not 100!", complete.getPercentComplete()==100);
 		} else {
-			assertThat("The percent complete is 100!", complete.getPercentComplete(), is(not(100)));
+			assertTrue("The percent complete is 100!", complete.getPercentComplete()!=100);
 		}
 	}
-	
-	protected void checkForShutdownConsumer(UUID qConsID, QueueNameMap qNames) throws Exception {
+
+	protected void checkForShutdownConsumer(UUID qConsID, String heartbeatTopicName) throws Exception {
 		
 		//Wait first to give consumer time to stop
-		Thread.sleep(3000);//TODO This has been optimised. Would be better with a latch, but not sure what to test for latch release
+		//This has been optimised. Expect a heartbeat every 200ms (we set this!), so this should be long 
+		//enough *not* to hear anything
+		Thread.sleep(350);
 		
 		//Check the queue has been stopped
-		IEventService evServ = qServ.getEventService();
-		ISubscriber<IHeartbeatListener> heartMonitor = evServ.createSubscriber(qServ.getURI(), qNames.getHeartbeatTopicName());
-		final List<HeartbeatBean> heartRate = new ArrayList<HeartbeatBean>();
-		heartMonitor.addListener(new IHeartbeatListener.Stub() {
-			@Override
-			public void heartbeatPerformed(HeartbeatEvent evt) {
-				HeartbeatBean bean = evt.getBean();
-				if (bean.getConsumerId().equals(qConsID)) {;
-				heartRate.add(bean);
-				}
-			}
-		});
+		IHeartbeatMonitor hbm = new HeartbeatMonitor(uri, heartbeatTopicName, qConsID);
+		
 		//Wait to see if we hear a beat
-		Thread.sleep(3000);//FIXME
-		assertTrue("Heartbeat detected, consumer not disconnected", heartRate.isEmpty());
+		Thread.sleep(500);//Heartbeats occur every 200ms (we set this!), so need to wait this long.
+		assertTrue("Heartbeat detected, consumer not disconnected", hbm.getRecorder().isEmpty());
 	}
 	
 	protected void checkForStoppedConsumer(IQueue<? extends Queueable> queue) throws Exception {
 		assertFalse("Consumer should not be active", queue.getConsumer().isActive());
 		
 		HeartbeatBean b1 = queue.getLastHeartbeat();
-		Thread.sleep(2000);
+		//Wait to see if we hear a beat
+		Thread.sleep(500);//Heartbeats occur every 200ms (we set this!), so need to wait this long.
 		HeartbeatBean b2 = queue.getLastHeartbeat();
 		
 		assertEquals("Consumer is still alive - beats 2secs apart are different.", b1, b2);
 		
 	}
-
-	protected void pauseForFinalStatus(long timeout) throws Exception {
+	
+	protected void waitForBeanFinalState(Queueable bean, IConsumer<? extends Queueable> cons, long timeout) throws Exception {
+		waitForBeanState(bean, cons, null, true, timeout);
+	}
+	
+	protected void waitForBeanState(Queueable bean, IConsumer<? extends Queueable> cons, Status state, boolean isFinal, long timeout) throws Exception {
 		final CountDownLatch statusLatch = new CountDownLatch(1);
-		IEventService evServ = qServ.getEventService();
-		ISubscriber<IBeanListener<ScanBean>> statusSubsc = evServ.createSubscriber(uri, IEventService.STATUS_TOPIC);
-		statusSubsc.addListener(new IBeanListener<ScanBean>() {
+		ISubscriber<IBeanListener<Queueable>> statusSubsc = infrastructureServ.makeSubscriber(cons.getStatusTopicName());
+		statusSubsc.addListener(new IBeanListener<Queueable>() {
 
 			@Override
-			public void beanChangePerformed(BeanEvent<ScanBean> evt) {
-				ScanBean bean = evt.getBean();
-				if (bean.getStatus().isFinal()) {
-					statusLatch.countDown();
+			public void beanChangePerformed(BeanEvent<Queueable> evt) {
+				Queueable evtBean = evt.getBean();
+				if (evtBean.getUniqueId().equals(bean.getUniqueId())) {
+					if ((evtBean.getStatus() == state) || (evtBean.getStatus().isFinal() && isFinal)) {
+						statusLatch.countDown();
+					}
 				}
 			}
-
+			
 		});
-		statusLatch.await(timeout, TimeUnit.MILLISECONDS);
-		return;
+		if (!(cons.getStatusSet().isEmpty() || cons.getStatusSet().size() == 0)) { 
+			//Extra "size()" test seems superfluous, but the "isEmpty()" was not picked up in testing...
+			Status lastBeanState = cons.getStatusSet().get(0).getStatus();
+			if ((lastBeanState == state) || (lastBeanState.isFinal() && isFinal)) statusLatch.countDown();
+		}
+		
+		boolean released = statusLatch.await(timeout, TimeUnit.MILLISECONDS);
+		if (released) {
+			System.out.println("~~~~~~~~~~~~~~~~~~~~~~~~~\n Final state reached\n~~~~~~~~~~~~~~~~~~~~~~~~~");
+		} else {
+			System.out.println("#########################\n No final state reported\n#########################");
+		}
+		statusSubsc.disconnect();
 	}
 
 }

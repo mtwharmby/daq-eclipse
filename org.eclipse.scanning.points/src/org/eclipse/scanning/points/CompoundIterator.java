@@ -1,7 +1,10 @@
 package org.eclipse.scanning.points;
 
+import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 
+import org.eclipse.scanning.api.points.AbstractPosition;
 import org.eclipse.scanning.api.points.GeneratorException;
 import org.eclipse.scanning.api.points.IPointGenerator;
 import org.eclipse.scanning.api.points.IPosition;
@@ -31,7 +34,7 @@ public class CompoundIterator implements Iterator<IPosition> {
 		
 	    IPosition pos = new MapPosition();
 		for (int i = 0; i < iterators.length-1; i++) {
-			pos = iterators[i].next().composite(pos);
+			pos = iterators[i].next().compound(pos);
 		}
 		return pos;
 	}
@@ -58,12 +61,14 @@ public class CompoundIterator implements Iterator<IPosition> {
 		for (int i = iterators.length-1; i > -1; i--) {
 			if (iterators[i].hasNext()) {
 				IPosition next = iterators[i].next();
-				pos = next.composite(pos);
+				pos = next.compound(pos);
+				((AbstractPosition)pos).setDimensionNames(gen.getDimensionNames());
 				return pos;
 			} else if (i>0) {
 				iterators[i]    = gen.getGenerators()[i].iterator();
 				IPosition first = iterators[i].next();
-				pos = first.composite(pos);
+				pos = first.compound(pos);
+				((AbstractPosition)pos).setDimensionNames(gen.getDimensionNames());
 			}
 		}
 		return null;
@@ -71,7 +76,7 @@ public class CompoundIterator implements Iterator<IPosition> {
 
 
 	private Iterator<? extends IPosition>[] initIterators() {
-		final IPointGenerator<?,? extends IPosition>[] gs = gen.getGenerators();
+		final IPointGenerator<?>[] gs = gen.getGenerators();
 		@SuppressWarnings("unchecked")
 		Iterator<? extends IPosition>[] ret = new Iterator[gs.length];
 		for (int i = 0; i < gs.length; i++) {

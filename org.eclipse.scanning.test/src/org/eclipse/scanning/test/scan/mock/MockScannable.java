@@ -55,6 +55,13 @@ public class MockScannable extends AbstractScannable<Number> implements IConfigu
 		setName(name);
 		this.position = position;
 	}
+	public MockScannable(String name, Double position, int level, boolean requireSleep) {
+    	this();
+    	this.requireSleep = requireSleep;
+		setLevel(level);
+		setName(name);
+		this.position = position;
+	}
 	public MockScannable(String name, Double position, int level, String unit) {
     	this();
 		setLevel(level);
@@ -170,7 +177,7 @@ public class MockScannable extends AbstractScannable<Number> implements IConfigu
 			}
 		}
 		
-		throw new Exception("Not call to setPosition had value="+value+" and position="+point);
+		throw new Exception("No call to setPosition had value="+value+" and position="+point);
 	}
 	
 	@Override

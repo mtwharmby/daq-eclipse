@@ -28,17 +28,18 @@ import org.eclipse.dawnsci.analysis.dataset.impl.DatasetFactory;
 import org.eclipse.dawnsci.analysis.dataset.impl.DoubleDataset;
 import org.eclipse.dawnsci.nexus.INexusDevice;
 import org.eclipse.dawnsci.nexus.NXdetector;
-import org.eclipse.dawnsci.nexus.NexusBaseClass;
 import org.eclipse.dawnsci.nexus.NexusException;
 import org.eclipse.dawnsci.nexus.NexusNodeFactory;
 import org.eclipse.dawnsci.nexus.NexusScanInfo;
-import org.eclipse.dawnsci.nexus.builder.DelegateNexusProvider;
 import org.eclipse.dawnsci.nexus.builder.NexusObjectProvider;
+import org.eclipse.dawnsci.nexus.builder.NexusObjectWrapper;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IWritableDetector;
 import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.scan.ScanningException;
+import org.eclipse.scanning.api.scan.rank.IScanRankService;
+import org.eclipse.scanning.api.scan.rank.IScanSlice;
 
 /**
  * A dummy detector which must be set up with references to two Scannables representing X and Y positions. When used in a step scan, this detector generates a
@@ -48,8 +49,12 @@ import org.eclipse.scanning.api.scan.ScanningException;
  */
 public class MandelbrotDetector extends AbstractRunnableDevice<MandelbrotModel> implements IWritableDetector<MandelbrotModel>, INexusDevice<NXdetector> {
 
+	// Field names to be used in the NeXus file 
 	private static final String FIELD_NAME_VALUE = "value";
 	private static final String FIELD_NAME_SPECTRUM = "spectrum";
+	private static final String FIELD_NAME_SPECTRUM_AXIS = "spectrum_axis";
+	private static final String FIELD_NAME_IMAGINARY_AXIS = "imaginary";
+	private static final String FIELD_NAME_REAL_AXIS = "real";
 
 	// Data to be passed from run() to write()
 	private IDataset image;
@@ -68,27 +73,29 @@ public class MandelbrotDetector extends AbstractRunnableDevice<MandelbrotModel> 
 	}
 
 	@Override
-	public NexusObjectProvider<NXdetector> getNexusProvider(NexusScanInfo info) {
-		DelegateNexusProvider<NXdetector> nexusProvider = new DelegateNexusProvider<NXdetector>(
-				getName(), NexusBaseClass.NX_DETECTOR, info, this);
+	public NexusObjectProvider<NXdetector> getNexusProvider(NexusScanInfo info) throws NexusException {
+		NXdetector detector = createNexusObject(info);
+		NexusObjectWrapper<NXdetector> nexusProvider = new NexusObjectWrapper<>(getName(), detector);
 
-		// Add all fields for any NXdata groups that this device creates
-		nexusProvider.setDataFields(NXdetector.NX_DATA, FIELD_NAME_SPECTRUM, FIELD_NAME_VALUE);
-		
 		// "data" is the name of the primary data field (i.e. the 'signal' field of the default NXdata)
-		nexusProvider.setPrimaryDataField(NXdetector.NX_DATA);
+		nexusProvider.setPrimaryDataFieldName(NXdetector.NX_DATA);
 		// An additional NXdata group with "spectrum" as the signal to hold the 1D spectrum data
-		nexusProvider.addAdditionalPrimaryDataField(FIELD_NAME_SPECTRUM);
+		nexusProvider.addAdditionalPrimaryDataFieldName(FIELD_NAME_SPECTRUM);
 		// An additional NXdata group with "value" as the signal to hold the Mandelbrot value
-		nexusProvider.addAdditionalPrimaryDataField(FIELD_NAME_VALUE);
+		nexusProvider.addAdditionalPrimaryDataFieldName(FIELD_NAME_VALUE);
+
+		// Add the axes to the image and spectrum data. scanRank here corresponds to the position
+		// in the axes attribute written in the NeXus file (0 based)
+		int scanRank = info.getRank();
+		nexusProvider.addAxisDataFieldForPrimaryDataField(FIELD_NAME_REAL_AXIS, NXdetector.NX_DATA, scanRank); 
+		nexusProvider.addAxisDataFieldForPrimaryDataField(FIELD_NAME_IMAGINARY_AXIS, NXdetector.NX_DATA, scanRank + 1);
+		nexusProvider.addAxisDataFieldForPrimaryDataField(FIELD_NAME_SPECTRUM_AXIS, FIELD_NAME_SPECTRUM, scanRank);
 
 		return nexusProvider;
 	}
 
-	@Override
-	public NXdetector createNexusObject(NexusNodeFactory nodeFactory, NexusScanInfo info) throws NexusException {
-		
-		final NXdetector detector = nodeFactory.createNXdetector();
+	private NXdetector createNexusObject(NexusScanInfo info) throws NexusException {
+		final NXdetector detector = NexusNodeFactory.createNXdetector();
 
 		int scanRank = info.getRank();
 		// We add 2 to the scan rank to include the image
@@ -110,10 +117,9 @@ public class MandelbrotDetector extends AbstractRunnableDevice<MandelbrotModel> 
 		detector.setField("max_iterations", model.getMaxIterations());
 
 		// The axis datasets
-		// FIXME These are not linked using an axis tag to the 4D block (Don't think thats possible yet)
-		detector.setDataset("image_x_axis", DatasetFactory.createLinearSpace(-model.getMaxRealCoordinate(), model.getMaxRealCoordinate(), model.getRows(), Dataset.FLOAT64));
-		detector.setDataset("image_y_axis", DatasetFactory.createLinearSpace(-model.getMaxImaginaryCoordinate(), model.getMaxImaginaryCoordinate(), model.getColumns(), Dataset.FLOAT64));
-		detector.setDataset("spectrum_axis", DatasetFactory.createLinearSpace(0.0, model.getMaxRealCoordinate(), model.getPoints(), Dataset.FLOAT64));
+		detector.setDataset(FIELD_NAME_REAL_AXIS, DatasetFactory.createLinearSpace(-model.getMaxRealCoordinate(), model.getMaxRealCoordinate(), model.getRows(), Dataset.FLOAT64));
+		detector.setDataset(FIELD_NAME_IMAGINARY_AXIS, DatasetFactory.createLinearSpace(-model.getMaxImaginaryCoordinate(), model.getMaxImaginaryCoordinate(), model.getColumns(), Dataset.FLOAT64));
+		detector.setDataset(FIELD_NAME_SPECTRUM_AXIS, DatasetFactory.createLinearSpace(0.0, model.getMaxRealCoordinate(), model.getPoints(), Dataset.FLOAT64));
 
 		Attributes.registerAttributes(detector, this);
 		
@@ -161,13 +167,16 @@ public class MandelbrotDetector extends AbstractRunnableDevice<MandelbrotModel> 
 	public boolean write(IPosition pos) throws ScanningException {
 
 		try {
-			SliceND sliceND = NexusScanInfo.createLocation(imageData, pos.getNames(), pos.getIndices(), model.getRows(), model.getColumns());
+			IScanSlice rslice = IScanRankService.getScanRankService().createScanSlice(pos, model.getRows(), model.getColumns());
+			SliceND sliceND = new SliceND(imageData.getShape(), imageData.getMaxShape(), rslice.getStart(), rslice.getStop(), rslice.getStep());
 			imageData.setSlice(null, image, sliceND);
 			
-			sliceND = NexusScanInfo.createLocation(spectrumData, pos.getNames(), pos.getIndices(), model.getPoints());
+			rslice = IScanRankService.getScanRankService().createScanSlice(pos, model.getPoints());
+			sliceND = new SliceND(spectrumData.getShape(), spectrumData.getMaxShape(), rslice.getStart(), rslice.getStop(), rslice.getStep());
 			spectrumData.setSlice(null, spectrum, sliceND);
 
-			sliceND = NexusScanInfo.createLocation(valueData, pos.getNames(), pos.getIndices());
+			rslice = IScanRankService.getScanRankService().createScanSlice(pos);
+			sliceND = new SliceND(valueData.getShape(), valueData.getMaxShape(), rslice.getStart(), rslice.getStop(), rslice.getStep());
 			valueData.setSlice(null, DoubleDataset.createFromObject(value), sliceND);
 
 		} catch (Exception e) {

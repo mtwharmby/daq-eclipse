@@ -17,10 +17,8 @@ import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.event.scan.ScanRequest;
 import org.eclipse.scanning.api.event.status.Status;
 import org.eclipse.scanning.api.points.GeneratorException;
-import org.eclipse.scanning.api.points.IPointGenerator;
 import org.eclipse.scanning.api.points.IPointGeneratorService;
 import org.eclipse.scanning.api.points.IPosition;
-import org.eclipse.scanning.api.points.models.IScanPathModel;
 import org.eclipse.scanning.api.scan.IFilePathService;
 import org.eclipse.scanning.api.scan.ScanEstimator;
 import org.eclipse.scanning.api.scan.ScanningException;
@@ -31,6 +29,8 @@ import org.eclipse.scanning.api.script.ScriptExecutionException;
 import org.eclipse.scanning.api.script.ScriptRequest;
 import org.eclipse.scanning.api.script.ScriptResponse;
 import org.eclipse.scanning.api.script.UnsupportedLanguageException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Object for running a scan.
@@ -39,6 +39,8 @@ import org.eclipse.scanning.api.script.UnsupportedLanguageException;
  *
  */
 class ScanProcess extends AbstractPausableProcess<ScanBean> {
+	
+	private static final Logger logger = LoggerFactory.getLogger(ScanProcess.class);
 
 	// Services
 	private IPositioner                positioner;
@@ -120,6 +122,7 @@ class ScanProcess extends AbstractPausableProcess<ScanBean> {
 	    // Intentionally do not catch EventException, that passes straight up.
 		} catch (ScanningException | InterruptedException | UnsupportedLanguageException | ScriptExecutionException ne) {
 			ne.printStackTrace();
+			logger.error("Cannot exexute run "+getBean().getUniqueId(), ne);
 			bean.setPreviousStatus(Status.RUNNING);
 			bean.setStatus(Status.FAILED);
 			bean.setMessage(ne.getMessage());
@@ -131,14 +134,14 @@ class ScanProcess extends AbstractPausableProcess<ScanBean> {
 
 	private ScriptResponse<?> runScript(ScriptRequest req) throws EventException, UnsupportedLanguageException, ScriptExecutionException {
 		if (req==null) return null; // Nothing to do
-		if (scriptService==null) throw new EventException("Not script service is available, cannot run script request "+req);
+		if (scriptService==null) throw new EventException("No script service is available, cannot run script request "+req);
 		return scriptService.execute(req);		
 	}
 
 	private IPausableDevice<ScanModel> createRunnableDevice(ScanBean bean) throws ScanningException, EventException {
 
 		ScanRequest<?> req = bean.getScanRequest();
-		if (req==null) throw new ScanningException("There must be a scan request to run a new scan!");
+		if (req==null) throw new ScanningException("There must be a scan request to run a scan!");
 		
 		try {
 			final ScanModel scanModel = new ScanModel();
@@ -193,32 +196,14 @@ class ScanProcess extends AbstractPausableProcess<ScanBean> {
 	@SuppressWarnings("unchecked")
 	private Iterable<IPosition> getPositionIterable(ScanRequest<?> req) throws GeneratorException {
 		IPointGeneratorService service = Services.getGeneratorService();
-		
-		IPointGenerator<?,? extends IPosition> ret = null;
-		for (IScanPathModel model : req.getModels()) {
-			IPointGenerator<?,? extends IPosition> gen = service.createGenerator(model, req.getRegions(model.getUniqueKey()));
-			if (ret != null) ret = service.createCompoundGenerator(ret, gen);
-			if (ret==null) ret = gen;
-		}
-		return (Iterable<IPosition>)ret;
+		return service.createCompoundGenerator(req.getCompoundModel());
 	}
 
 	@Override
-	public void terminate() throws EventException {
+	public void doTerminate() throws Exception {
+		
 		if (bean.getStatus()==Status.COMPLETE) return; // Nothing to terminate.
-		try {
-			bean.setPreviousStatus(Status.RUNNING);
-			bean.setStatus(Status.TERMINATED);
-			broadcast(bean);
-			device.abort();
-			
-		} catch (ScanningException e) {
-			bean.setPreviousStatus(Status.RUNNING);
-			bean.setStatus(Status.FAILED);
-			broadcast(bean);
-
-			throw new EventException(e);
-		}
+		device.abort();
 	}
 	
 	private List<IRunnableDevice<?>> getDetectors(ScanBean bean, Map<String, ?> detectors) throws EventException {
@@ -255,7 +240,7 @@ class ScanProcess extends AbstractPausableProcess<ScanBean> {
 	}
 	
 	private void broadcast(ScanBean bean) throws EventException {
-		if (publisher!=null && publisher.isAlive()) {
+		if (publisher!=null) {
 			publisher.broadcast(bean);
 		}		
 	}

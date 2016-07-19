@@ -4,20 +4,25 @@ import java.io.PrintStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.IEventConnectorService;
+import org.eclipse.scanning.api.event.core.IConsumer;
 import org.eclipse.scanning.api.event.core.IPublisher;
 import org.eclipse.scanning.api.event.queues.beans.IAtomWithChildQueue;
+import org.eclipse.scanning.api.event.queues.beans.Queueable;
 import org.eclipse.scanning.api.event.status.StatusBean;
+import org.eclipse.scanning.test.event.queues.dummy.DummyHasQueue;
 
-public class MockPublisher<T> implements IPublisher<T> {
+public class MockPublisher<T extends StatusBean> implements IPublisher<T> {
+	
+	
 	private String topicName;
 	private final URI uri;
 	private String queueName;
+	private IConsumer<?> consumer;
 	
-	private List<DummyQueueable> broadcastBeans = new ArrayList<>();
+	private List<Queueable> broadcastBeans = new ArrayList<>();
 	
 	private boolean alive;
 	
@@ -53,13 +58,13 @@ public class MockPublisher<T> implements IPublisher<T> {
 	
 	@Override
 	public void broadcast(T bean) throws EventException {
-		final DummyQueueable broadBean = new DummyQueueable();
-		broadBean.setMessage(((StatusBean)bean).getMessage());
-		broadBean.setPreviousStatus(((StatusBean)bean).getPreviousStatus());
-		broadBean.setStatus(((StatusBean)bean).getStatus());
-		broadBean.setPercentComplete(((StatusBean)bean).getPercentComplete());
-		broadBean.setUniqueId(((StatusBean)bean).getUniqueId());
-		broadBean.setName(((StatusBean)bean).getName());
+		final DummyHasQueue broadBean = new DummyHasQueue();
+		broadBean.setMessage(bean.getMessage());
+		broadBean.setPreviousStatus(bean.getPreviousStatus());
+		broadBean.setStatus(bean.getStatus());
+		broadBean.setPercentComplete(bean.getPercentComplete());
+		broadBean.setUniqueId(bean.getUniqueId());
+		broadBean.setName(bean.getName());
 		
 		if (bean instanceof IAtomWithChildQueue) {
 			broadBean.setQueueMessage(((IAtomWithChildQueue)bean).getQueueMessage());
@@ -68,8 +73,16 @@ public class MockPublisher<T> implements IPublisher<T> {
 		broadcastBeans.add(broadBean);
 	}
 	
-	public List<DummyQueueable> getBroadcastBeans() {
+	public List<Queueable> getBroadcastBeans() {
 		return broadcastBeans;
+	}
+	
+	public Queueable getLastBean() {
+		if (broadcastBeans.size() > 0) {
+			return broadcastBeans.get(broadcastBeans.size()-1);
+		} else {
+			return null;
+		}
 	}
 
 	@Override
@@ -83,39 +96,21 @@ public class MockPublisher<T> implements IPublisher<T> {
 	}
 
 	@Override
-	public void setQueueName(String queueName) {
+	public void setStatusSetName(String queueName) {
 		this.queueName = queueName;
 		
 	}
 
 	@Override
-	public String getQueueName() {
+	public String getStatusSetName() {
 		return queueName;
 	}
-
+	
 	@Override
-	public String getConsumerName() {
-		// TODO Auto-generated method stub
-		return null;
+	public void setStatusSetAddRequired(boolean required) {
+		throw new RuntimeException("setStatusSetAddRequired is not implemented!");
 	}
 
-	@Override
-	public void setConsumerName(String cname) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public UUID getConsumerId() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public void setConsumerId(UUID id) {
-		// TODO Auto-generated method stub
-		
-	}
 
 	@Override
 	public void setLoggingStream(PrintStream stream) {
@@ -127,6 +122,14 @@ public class MockPublisher<T> implements IPublisher<T> {
 	public IEventConnectorService getConnectorService() {
 		// TODO Auto-generated method stub
 		return null;
+	}
+
+	public IConsumer<?> getConsumer() {
+		return consumer;
+	}
+
+	public void setConsumer(IConsumer<?> consumer) {
+		this.consumer = consumer;
 	}
 
 }

@@ -16,7 +16,7 @@ import org.eclipse.scanning.api.points.IPosition;
  * @author Matthew Gerring
  *
  */
-public interface IScannable<T> extends ILevel, INameable {
+public interface IScannable<T> extends ILevel, INameable, ITimeoutable {
 	
 	/**
 	 * Returns the current position of the Scannable. Called by ConcurentScan at the end of the point. 
@@ -35,7 +35,9 @@ public interface IScannable<T> extends ILevel, INameable {
 	 * @param position
 	 * @throws Exception
 	 */
-	public void setPosition(T value) throws Exception;
+	default void setPosition(T value) throws Exception {
+		setPosition(value, null);
+	}
 
 	
 	/**
@@ -55,5 +57,6 @@ public interface IScannable<T> extends ILevel, INameable {
 	default String getUnit() {
 		return null;
 	}
+
 
 }

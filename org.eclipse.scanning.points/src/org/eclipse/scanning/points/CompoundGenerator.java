@@ -1,33 +1,54 @@
 package org.eclipse.scanning.points;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
 import org.eclipse.scanning.api.points.AbstractGenerator;
+import org.eclipse.scanning.api.points.AbstractPosition;
 import org.eclipse.scanning.api.points.GeneratorException;
 import org.eclipse.scanning.api.points.IPointGenerator;
 import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.points.models.IScanPathModel;
 
-class CompoundGenerator extends AbstractGenerator<IScanPathModel, IPosition> {
+/**
+ * 
+ * The compound generator must only compound positions
+ * which implement AbstractPosition or  
+ * 
+ * @author Matthew Gerring
+ *
+ */
+class CompoundGenerator extends AbstractGenerator<IScanPathModel> {
 	
-	private IPointGenerator<?, ? extends IPosition>[] generators;
+	private IPointGenerator<?>[] generators;
+	private List<Collection<String>> dimensionNames;
 
-	public CompoundGenerator(IPointGenerator<?,? extends IPosition>[] generators) throws GeneratorException {
+	public CompoundGenerator(IPointGenerator<?>[] generators) throws GeneratorException {
 		super(createId(generators));
         if (generators == null || generators.length<1) throw new GeneratorException("Cannot make a compound generator from a list of less than one generators!");
 	    this.generators = generators;
+	    this.dimensionNames = createDimensionNames(generators);
 		setLabel("Compound");
 		setDescription("Compound generator used when wrapping scans.");
 		setVisible(false);
 	}
-	
-	private static String createId(IPointGenerator<?, ? extends IPosition>[] gens) throws GeneratorException {
+
+	private List<Collection<String>> createDimensionNames(IPointGenerator<?>[] generators) {
+		List<Collection<String>> names = new ArrayList<>(generators.length+2); // Roughly
+		for (IPointGenerator<?> gen : generators) {
+			IPosition pos = gen.iterator().next();
+			names.addAll(((AbstractPosition)pos).getDimensionNames());
+		}
+		return names;
+	}
+
+	private static String createId(IPointGenerator<?>[] gens) throws GeneratorException {
         if (gens == null || gens.length<1) throw new GeneratorException("Cannot make a compound generator from a list of less than one generators!");
 	
         final StringBuilder buf = new StringBuilder();
-        for (IPointGenerator<?, ? extends IPosition> gen : gens) buf.append("+"+gen);
+        for (IPointGenerator<?> gen : gens) buf.append("+"+gen);
         return buf.toString();
 	}
 
@@ -72,10 +93,12 @@ class CompoundGenerator extends AbstractGenerator<IScanPathModel, IPosition> {
 	 */
 	private void createPoints(int igen, List<IPosition> points, IPosition parent) {
 		
-		IPointGenerator<?,? extends IPosition> gen = generators[igen];
+		IPointGenerator<?> gen = generators[igen];
 		Iterator<? extends IPosition>     it  = gen.iterator();
 		while(it.hasNext()) {
-			IPosition pos = it.next().composite(parent);
+			IPosition next = it.next();
+			IPosition pos = next.compound(parent);
+			((AbstractPosition)pos).setDimensionNames(dimensionNames);
 			int nextGen = igen+1;
 			if (nextGen<generators.length) {
 				createPoints(nextGen, points, pos);
@@ -86,8 +109,16 @@ class CompoundGenerator extends AbstractGenerator<IScanPathModel, IPosition> {
 	
 	}
 
-	public IPointGenerator<?, ? extends IPosition>[] getGenerators() {
+	public IPointGenerator<?>[] getGenerators() {
 		return generators;
+	}
+
+	public List<Collection<String>> getDimensionNames() {
+		return dimensionNames;
+	}
+
+	public void setDimensionNames(List<Collection<String>> dimensionNames) {
+		this.dimensionNames = dimensionNames;
 	}
 
 }

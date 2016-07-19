@@ -14,12 +14,11 @@ import org.eclipse.dawnsci.nexus.NexusFile;
 import org.eclipse.scanning.api.IConfigurable;
 import org.eclipse.scanning.api.IScannable;
 import org.eclipse.scanning.api.device.IDeviceConnectorService;
-import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableDevice;
+import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.points.IPointGenerator;
 import org.eclipse.scanning.api.points.IPointGeneratorService;
-import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.points.models.BoundingBox;
 import org.eclipse.scanning.api.points.models.GridModel;
 import org.eclipse.scanning.api.scan.models.ScanModel;
@@ -163,7 +162,7 @@ public class LowLevelDetectorPluginTest {
 		gmodel.setSlowAxisPoints(size[0]);
 		gmodel.setFastAxisPoints(size[1]);
 		gmodel.setBoundingBox(new BoundingBox(0,0,3,3));	
-		IPointGenerator<?,IPosition> gen = gservice.createGenerator(gmodel);
+		IPointGenerator<?> gen = gservice.createGenerator(gmodel);
 
 		// Create the model for a scan.
 		final ScanModel  smodel = new ScanModel();

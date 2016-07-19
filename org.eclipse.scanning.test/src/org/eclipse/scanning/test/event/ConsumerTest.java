@@ -8,8 +8,6 @@
  */
 package org.eclipse.scanning.test.event;
 
-import java.net.URI;
-
 import org.eclipse.dawnsci.json.MarshallerService;
 import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.event.EventServiceImpl;
@@ -34,11 +32,7 @@ public class ConsumerTest extends AbstractConsumerTest{
 		// DO NOT COPY THIS IN NON-TEST CODE!
 		ActivemqConnectorService.setJsonMarshaller(new MarshallerService(new PointsModelMarshaller()));
 		eservice = new EventServiceImpl(new ActivemqConnectorService()); // Do not copy this get the service from OSGi!
-		
-		// Use in memory broker removes requirement on network and external ActiveMQ process
-		// http://activemq.apache.org/how-to-unit-test-jms-code.html
-		final URI uri = new URI("vm://localhost?broker.persistent=false");
-		
+				
 		// We use the long winded constructor because we need to pass in the connector.
 		// In production we would normally 
 		submitter  = eservice.createSubmitter(uri, IEventService.SUBMISSION_QUEUE);

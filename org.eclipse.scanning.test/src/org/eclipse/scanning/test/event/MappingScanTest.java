@@ -18,18 +18,18 @@ import org.eclipse.scanning.api.event.status.Status;
 import org.eclipse.scanning.api.points.IPointGenerator;
 import org.eclipse.scanning.api.points.IPointGeneratorService;
 import org.eclipse.scanning.api.points.IPosition;
-import org.eclipse.scanning.api.points.Point;
 import org.eclipse.scanning.api.points.models.BoundingBox;
 import org.eclipse.scanning.api.points.models.GridModel;
 import org.eclipse.scanning.event.EventServiceImpl;
 import org.eclipse.scanning.points.PointGeneratorFactory;
 import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
+import org.eclipse.scanning.test.BrokerTest;
 import org.junit.Before;
 import org.junit.Test;
 
 import uk.ac.diamond.daq.activemq.connector.ActivemqConnectorService;
 
-public class MappingScanTest {
+public class MappingScanTest extends BrokerTest{
 
 	protected IEventService eservice;
 	protected IPublisher<ScanBean> publisher;
@@ -44,10 +44,6 @@ public class MappingScanTest {
 		ActivemqConnectorService.setJsonMarshaller(new MarshallerService(new PointsModelMarshaller()));
 		eservice = new EventServiceImpl(new ActivemqConnectorService());
 		gservice = new PointGeneratorFactory();
-
-		// Use in memory broker removes requirement on network and external ActiveMQ process
-		// http://activemq.apache.org/how-to-unit-test-jms-code.html
-		final URI uri = new URI("vm://localhost?broker.persistent=false");
 
 		// We use the long winded constructor because we need to pass in the connector.
 		// In production we would normally
@@ -67,7 +63,7 @@ public class MappingScanTest {
 
 		// Listen to events sent
 		final List<ScanBean> gotBack = new ArrayList<ScanBean>(3);
-		subscriber.addListener(new IScanListener.Stub() {
+		subscriber.addListener(new IScanListener() {
 			@Override
 			public void scanStateChanged(ScanEvent evt) {
 				gotBack.add(evt.getBean());
@@ -105,7 +101,7 @@ public class MappingScanTest {
 		model.setFastAxisPoints(5);
 		model.setBoundingBox(box);
 
-		IPointGenerator<GridModel, Point> gen = gservice.createGenerator(model);
+		IPointGenerator<GridModel> gen = gservice.createGenerator(model);
 
 		// Outer loop temperature, will be scan command driven when sequencer exists.
 		bean.setDeviceState(DeviceState.CONFIGURING);
@@ -116,7 +112,7 @@ public class MappingScanTest {
 			bean.setPoint(ipoint);
 			bean.putPosition("temperature", ++index, temp);
 			testDeviceScan(bean, gen);
-			Thread.sleep(1000); // Moving to the new temp takes non-zero time so I've heard.
+			Thread.sleep(10); // Moving to the new temp takes non-zero time so I've heard.
 			++ipoint;
 		}
 
@@ -124,14 +120,14 @@ public class MappingScanTest {
 		bean.setStatus(Status.COMPLETE);
 		publisher.broadcast(bean);
 
-		Thread.sleep(1000); // Just to make sure all the message events come in
+		Thread.sleep(100); // Just to make sure all the message events come in
 
 		assertTrue(gotBack.size() > 10);
 		assertTrue(gotBack.get(1).scanStart());
 		assertTrue(gotBack.get(gotBack.size() - 1).scanEnd());
 	}
 
-	private void testDeviceScan(ScanBean bean, IPointGenerator<GridModel, Point> gen) throws Exception {
+	private void testDeviceScan(ScanBean bean, IPointGenerator<GridModel> gen) throws Exception {
 
 
 		bean.setDeviceState(DeviceState.RUNNING);

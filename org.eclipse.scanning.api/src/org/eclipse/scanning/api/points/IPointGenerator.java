@@ -13,11 +13,15 @@ import org.eclipse.scanning.api.points.models.IScanPathModel;
  * for the user interface which provides naming information about the
  * type of scan.
  * 
+ * @see IDeviceDependentIterable which allows a point generator to be created
+ * which instructs the scanning never to look at the points until they are in a scan.
+ * Useful for positions that interact with hardware as they are generated.
+ * 
  * @author Matthew Gerring
  *
  * @param <T>
  */
-public interface IPointGenerator<T extends IScanPathModel, P extends IPosition> extends Iterable<P> {
+public interface IPointGenerator<T extends IScanPathModel> extends Iterable<IPosition> {
 	
 	/**
 	 * The model for the generator.
@@ -46,7 +50,7 @@ public interface IPointGenerator<T extends IScanPathModel, P extends IPosition> 
 	 * 
 	 * @return
 	 */
-	Iterator<P> iterator();
+	Iterator<IPosition> iterator();
 	
 	/**
 	 * Relatively slow because all the points have to exist in memory.
@@ -55,7 +59,7 @@ public interface IPointGenerator<T extends IScanPathModel, P extends IPosition> 
 	 * 
 	 * @return
 	 */
-	List<P> createPoints() throws GeneratorException;
+	List<IPosition> createPoints() throws GeneratorException;
 	
 	/**
 	 * The id for this generator. Generators defined by extension must set an it.

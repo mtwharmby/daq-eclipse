@@ -12,10 +12,11 @@ import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.event.scan.IScanListener;
 import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.event.scan.ScanEvent;
+import org.eclipse.scanning.test.BrokerTest;
 import org.junit.After;
 import org.junit.Test;
 
-public class AbstractScanEventTest {
+public class AbstractScanEventTest extends BrokerTest{
 
 	protected IEventService              eservice;
 	protected IPublisher<ScanBean>       publisher;
@@ -56,7 +57,7 @@ public class AbstractScanEventTest {
 		bean.setName("fred");
 		
 		final List<ScanBean> gotBack = new ArrayList<ScanBean>(3);
-		subscriber.addListener(new IScanListener.Stub() {
+		subscriber.addListener(new IScanListener() {
 			@Override
 			public void scanEventPerformed(ScanEvent evt) {
 				gotBack.add(evt.getBean());
@@ -82,7 +83,7 @@ public class AbstractScanEventTest {
 		bean.setDeviceState(DeviceState.IDLE);
 		
 		final List<ScanBean> gotBack = new ArrayList<ScanBean>(3);
-		subscriber.addListener(new IScanListener.Stub() {
+		subscriber.addListener(new IScanListener() {
 			@Override
 			public void scanStateChanged(ScanEvent evt) {
 				gotBack.add(evt.getBean());
@@ -127,7 +128,7 @@ public class AbstractScanEventTest {
 		bean2.setDeviceState(DeviceState.IDLE);
 		
 		final List<ScanBean> gotBack = new ArrayList<ScanBean>(3);
-		subscriber.addListener(bean.getUniqueId(), new IScanListener.Stub() {
+		subscriber.addListener(bean.getUniqueId(), new IScanListener() {
 			@Override
 			public void scanStateChanged(ScanEvent evt) {
 				gotBack.add(evt.getBean());
@@ -135,7 +136,7 @@ public class AbstractScanEventTest {
 		});
 		
 		final List<ScanBean> all = new ArrayList<ScanBean>(3);
-		subscriber.addListener(new IScanListener.Stub() {
+		subscriber.addListener(new IScanListener() {
 			@Override
 			public void scanStateChanged(ScanEvent evt) {
 				all.add(evt.getBean());
@@ -194,14 +195,14 @@ public class AbstractScanEventTest {
 		bean2.setDeviceState(DeviceState.IDLE);
 		
 		final List<ScanBean> gotBack = new ArrayList<ScanBean>();
-		subscriber.addListener(bean.getUniqueId(), new IScanListener.Stub() {
+		subscriber.addListener(bean.getUniqueId(), new IScanListener() {
 			@Override
 			public void scanStateChanged(ScanEvent evt) {
 				gotBack.add(evt.getBean());
 				try {
 					// Should go here 4 times, taking ~2 secs
 					// Make this handler slow so events are missed
-					Thread.sleep(500);
+					Thread.sleep(50);
 				} catch (InterruptedException e) {
 					// Do nothing in a test
 				}
@@ -209,7 +210,7 @@ public class AbstractScanEventTest {
 		});
 		
 		final List<ScanBean> all = new ArrayList<ScanBean>();
-		subscriber.addListener(new IScanListener.Stub() {
+		subscriber.addListener(new IScanListener() {
 			@Override
 			public void scanStateChanged(ScanEvent evt) {
 				all.add(evt.getBean());
@@ -249,8 +250,8 @@ public class AbstractScanEventTest {
 		bean2.setDeviceState(DeviceState.IDLE);
 		publisher.broadcast(bean2);
 		
-		// Wait for 10 secs >> 2 secs
-		Thread.sleep(10000); // The bean should go back and forth in ms anyway
+		// Wait for 1 secs > 0.2 secs
+		Thread.sleep(1000); // The bean should go back and forth in ms anyway
 
 		if (gotBack.size()!=4) throw new Exception("The wrong number of state changes happened during the fake scan! Number found "+gotBack.size());
  	
@@ -276,7 +277,7 @@ public class AbstractScanEventTest {
 		bean2.setDeviceState(DeviceState.IDLE);
 		
 		final List<ScanBean> gotBack = new ArrayList<ScanBean>();
-		subscriber.addListener(bean.getUniqueId(), new IScanListener.Stub() {
+		subscriber.addListener(bean.getUniqueId(), new IScanListener() {
 			@Override
 			public void scanStateChanged(ScanEvent evt) {
 				gotBack.add(evt.getBean());
@@ -286,7 +287,7 @@ public class AbstractScanEventTest {
 		});
 		
 		final List<ScanBean> all = new ArrayList<ScanBean>();
-		subscriber.addListener(new IScanListener.Stub() {
+		subscriber.addListener(new IScanListener() {
 			@Override
 			public void scanStateChanged(ScanEvent evt) {
 				all.add(evt.getBean());
@@ -326,8 +327,7 @@ public class AbstractScanEventTest {
 		bean2.setDeviceState(DeviceState.IDLE);
 		publisher.broadcast(bean2);
 		
-		// Wait for 10 secs >> 2 secs
-		Thread.sleep(10000); // The bean should go back and forth in ms anyway
+		Thread.sleep(100); // The bean should go back and forth in ms anyway
 
 		if (gotBack.size()!=4) throw new Exception("The wrong number of state changes happened during the fake scan! Number found "+gotBack.size());
  	

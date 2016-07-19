@@ -46,12 +46,10 @@ public class LegacyDeviceSupportScanTest {
 	public void before() throws Exception {
 		fileFactory = new NexusFileFactoryHDF5();
 		ServiceHolder.setNexusFileFactory(fileFactory);
-		org.eclipse.scanning.sequencer.ServiceHolder.setFactory(new DefaultNexusBuilderFactory());
+		(new org.eclipse.scanning.sequencer.ServiceHolder()).setFactory(new DefaultNexusBuilderFactory());
 		connector = new MockLegacyScannableConnector();
 		runnableDeviceService = new RunnableDeviceServiceImpl(connector);
 		pointGeneratorService = new PointGeneratorFactory();
-		
-		
 	}
 	
 	@Test
@@ -90,7 +88,7 @@ public class LegacyDeviceSupportScanTest {
 	}
 	
 	private IRunnableDevice<ScanModel> createStepScan(int... size) throws Exception {
-		IPointGenerator<?,IPosition> gen = null;
+		IPointGenerator<?> gen = null;
 		
 		// We add the outer scans, if any
 		for (int dim = size.length-1; dim>-1; dim--) {
@@ -100,7 +98,7 @@ public class LegacyDeviceSupportScanTest {
 			} else {
 				model = new StepModel("neXusScannable"+(dim+1), 10,20,30); // Will generate one value at 10
 			}
-			final IPointGenerator<?,IPosition> step = pointGeneratorService.createGenerator(model);
+			final IPointGenerator<?> step = pointGeneratorService.createGenerator(model);
 			if (gen!=null) {
 				gen = pointGeneratorService.createCompoundGenerator(step, gen);
 			} else {
@@ -123,8 +121,8 @@ public class LegacyDeviceSupportScanTest {
 		// Create a scan and run it without publishing events
 		IRunnableDevice<ScanModel> scanner = runnableDeviceService.createRunnableDevice(smodel, null);
 		
-		final IPointGenerator<?,IPosition> fgen = gen;
-		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener.Stub() {
+		final IPointGenerator<?> fgen = gen;
+		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener() {
 			@Override
 			public void runWillPerform(RunEvent evt) throws ScanningException{
                 try {

@@ -67,7 +67,7 @@ public class XcenProcess extends AbstractPausableProcess<XcenBean>{
 	}
 
 	@Override
-	public void execute() throws EventException {
+	public void execute() throws EventException, InterruptedException {
 		
 		// Right we a starting the reconstruction, tell them.
 		bean.setStatus(Status.RUNNING);
@@ -106,7 +106,7 @@ public class XcenProcess extends AbstractPausableProcess<XcenBean>{
 	}
 
 	@Override
-	public void terminate() throws EventException {
+	public void doTerminate() throws EventException {
 		setCancelled(true);
 	}
 

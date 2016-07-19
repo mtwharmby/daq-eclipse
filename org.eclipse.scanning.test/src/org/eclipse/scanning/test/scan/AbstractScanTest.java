@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 
 import org.eclipse.scanning.api.ILevel;
@@ -15,8 +16,8 @@ import org.eclipse.scanning.api.INameable;
 import org.eclipse.scanning.api.IScannable;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IDeviceConnectorService;
-import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableDevice;
+import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IWritableDetector;
 import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.event.core.IPublisher;
@@ -25,6 +26,7 @@ import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.event.scan.IScanListener;
 import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.event.scan.ScanEvent;
+import org.eclipse.scanning.api.points.IDeviceDependentIterable;
 import org.eclipse.scanning.api.points.IPointGenerator;
 import org.eclipse.scanning.api.points.IPointGeneratorService;
 import org.eclipse.scanning.api.points.IPosition;
@@ -40,13 +42,14 @@ import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.api.scan.event.IPositionListener;
 import org.eclipse.scanning.api.scan.event.IPositioner;
 import org.eclipse.scanning.api.scan.models.ScanModel;
+import org.eclipse.scanning.test.BrokerTest;
 import org.eclipse.scanning.test.scan.mock.MockDetectorModel;
 import org.eclipse.scanning.test.scan.mock.MockScannable;
 import org.junit.Test;
 
-public class AbstractScanTest {
+public class AbstractScanTest extends BrokerTest {
 
-	protected IRunnableDeviceService              dservice;
+	protected IRunnableDeviceService      dservice;
 	protected IDeviceConnectorService     connector;
 	protected IPointGeneratorService      gservice;
 	protected IEventService               eservice;
@@ -75,7 +78,7 @@ public class AbstractScanTest {
 		IPositioner     pos    = dservice.createPositioner();
 		
 		final List<String> scannablesMoved = new ArrayList<>(6);
-		pos.addPositionListener(new IPositionListener.Stub() {
+		pos.addPositionListener(new IPositionListener() {
 			@Override
 			public void levelPerformed(PositionEvent evt) {
 				System.out.println("Level complete "+evt.getLevel());
@@ -119,7 +122,7 @@ public class AbstractScanTest {
 		IPositioner positioner   = dservice.createPositioner();
 
 		final List<String> levelsMoved = new ArrayList<>(6);
-		positioner.addPositionListener(new IPositionListener.Stub() {
+		positioner.addPositionListener(new IPositionListener() {
 			@Override
 			public void levelPerformed(PositionEvent evt) {
 				System.out.println("Level complete "+evt.getLevel());
@@ -161,13 +164,24 @@ public class AbstractScanTest {
 		checkRun(scanner);
 	}
 	
+	//@Test
+	public void testAbortSimpleScan() throws Exception {
+				
+		IRunnableDevice<ScanModel> scanner = createTestScanner(null, null, null, null, null);
+		scanner.start(null);
+		Thread.sleep(100);
+		scanner.abort();
+		Thread.sleep(100);
+		assertTrue("The Device state was "+scanner.getDeviceState()+" not "+DeviceState.ABORTED, scanner.getDeviceState()==DeviceState.ABORTED);
+	}
+	
 	@Test
 	public void testThreadCount() throws Exception {
 			
 		int before = Thread.activeCount();
 		IRunnableDevice<ScanModel> scanner = createTestScanner(null, null, null, null, null);
 		scanner.run(null);
-		Thread.sleep(2000);
+		Thread.sleep(200);
 		int after = Thread.activeCount();
 		if (after>before+1) throw new Exception("too many extra threads after scan! Expected not more than "+before+1+" got "+after);
 	}
@@ -247,7 +261,7 @@ public class AbstractScanTest {
 		
 		// 1. Set the model to make the detector throw an exception
 		MockDetectorModel dmodel = new MockDetectorModel();
-		dmodel.setExposureTime(0.1);
+		dmodel.setExposureTime(0.001);
 		dmodel.setAbortCount(3); // Aborts on the third write call by throwing an exception
 		IWritableDetector<MockDetectorModel> detector = (IWritableDetector<MockDetectorModel>)dservice.createRunnableDevice(dmodel);
 		
@@ -307,13 +321,12 @@ public class AbstractScanTest {
 		
 		// Use in memory broker removes requirement on network and external ActiveMQ process
 		// http://activemq.apache.org/how-to-unit-test-jms-code.html
-		final URI uri = new URI("vm://localhost?broker.persistent=false");
 		final IPublisher<ScanBean> publisher = eservice.createPublisher(uri, IEventService.STATUS_TOPIC);
 		
 		final ISubscriber<IScanListener> subscriber = eservice.createSubscriber(uri, IEventService.STATUS_TOPIC);
 		final List<ScanBean>    events = new ArrayList<ScanBean>(11);
 		final List<DeviceState> states = new ArrayList<DeviceState>(11);
-		subscriber.addListener(new IScanListener.Stub() {		
+		subscriber.addListener(new IScanListener() {		
 			@Override
 			public void scanStateChanged(ScanEvent evt) {
 				states.add(evt.getBean().getDeviceState());
@@ -333,14 +346,14 @@ public class AbstractScanTest {
 			IRunnableDevice<ScanModel> scanner = createTestScanner(null, bean, publisher, null, null);
 			scanner.run(null);
 			
-			Thread.sleep(1000); // Wait for all events to make it over from ActiveMQ
+			Thread.sleep(100); // Wait for all events to make it over from ActiveMQ
 			
 			checkRun(scanner);
 			
 			// Bit of a hack to get the generator from the model - should this be easier?
-			IPointGenerator<?,IPosition> gen = (IPointGenerator<?,IPosition>)((ScanModel)((AbstractRunnableDevice)scanner).getModel()).getPositionIterable();
+			IPointGenerator<?> gen = (IPointGenerator<?>)((ScanModel)((AbstractRunnableDevice)scanner).getModel()).getPositionIterable();
 			assertEquals(gen.size(), events.size());
-			assertEquals(Arrays.asList(DeviceState.READY, DeviceState.RUNNING, DeviceState.READY), states);
+			assertEquals(Arrays.asList(DeviceState.CONFIGURING, DeviceState.READY, DeviceState.RUNNING, DeviceState.READY), states);
 			
 			for (ScanBean b : events) assertEquals("fred", b.getUniqueId());
 		
@@ -362,8 +375,8 @@ public class AbstractScanTest {
 		// NOTE Did with Mockito but caused dependency issues.
 		MockScannable ms = (MockScannable)x;
 		ms.verify(0.3, new Point(0,0.3,0,0.3));
-		ms.verify(1.5, new Point(0,1.5,2,0.3));
-		ms.verify(0.3, new Point(2,0.3,0,1.5));
+		ms.verify(0.3, new Point(0,0.3,2,1.5));
+		ms.verify(1.5, new Point(2,1.5,0,0.3));
 		ms.verify(1.5, new Point(2,1.5,2,1.5));
 	}
 	
@@ -380,16 +393,16 @@ public class AbstractScanTest {
 		// NOTE Did with Mockito but caused dependency issues.
 		MockScannable ms = (MockScannable)monitor;
 		ms.verify(null, new Point(0,0.3,0,0.3));
-		ms.verify(null, new Point(0,1.5,2,0.3));
-		ms.verify(null, new Point(2,0.3,0,1.5));
+		ms.verify(null, new Point(0,0.3,2,1.5));
+		ms.verify(null, new Point(2,1.5,0,0.3));
 		ms.verify(null, new Point(2,1.5,2,1.5));
 	}
-
+	
 	private void checkRun(IRunnableDevice<ScanModel> scanner) throws Exception {
 		// Bit of a hack to get the generator from the model - should this be easier?
 		// Do not copy this code
 		ScanModel smodel = (ScanModel)((AbstractRunnableDevice)scanner).getModel();
-		IPointGenerator<?,IPosition> gen = (IPointGenerator<?,IPosition>)smodel.getPositionIterable();
+		IPointGenerator<?> gen = (IPointGenerator<?>)smodel.getPositionIterable();
 		MockDetectorModel dmodel = (MockDetectorModel)((AbstractRunnableDevice)smodel.getDetectors().get(0)).getModel();
 		assertEquals(gen.size(), dmodel.getRan());
 		assertEquals(gen.size(), dmodel.getWritten());
@@ -404,7 +417,7 @@ public class AbstractScanTest {
 		// Configure a detector with a collection time.
 		if (detector == null) {
 			MockDetectorModel dmodel = new MockDetectorModel();
-			dmodel.setExposureTime(0.1);
+			dmodel.setExposureTime(0.001);
 			dmodel.setName("detector");
 			detector = dservice.createRunnableDevice(dmodel);
 		}
@@ -417,7 +430,7 @@ public class AbstractScanTest {
 			((GridModel) pmodel).setBoundingBox(new BoundingBox(0,0,3,3));
 		}
 		
-		IPointGenerator<?,IPosition> gen = gservice.createGenerator(pmodel);
+		IPointGenerator<?> gen = gservice.createGenerator(pmodel);
 
 		// Create the model for a scan.
 		final ScanModel  smodel = new ScanModel();
@@ -430,5 +443,99 @@ public class AbstractScanTest {
 		IRunnableDevice<ScanModel> scanner = dservice.createRunnableDevice(smodel, publisher);
 		return scanner;
 	}
+	
+	/**
+	 * This test creates a generator which pauses on the next() call.
+	 * This simulates motors moving and checks that nothing in the 
+	 * scanning times out if this happens.
+	 * 
+	 * http://jira.diamond.ac.uk/browse/DAQ-150
+	 * 
+	 * @throws Exception
+	 */
+	@Test
+	public void testGeneratorWhichMimiksHardwareOperation() throws Exception {
+
+		final PausingIterable iterable = new PausingIterable(5);
+		
+		MockDetectorModel dmodel = new MockDetectorModel();
+		dmodel.setExposureTime(0.001);
+		dmodel.setName("detector");
+		IRunnableDevice<MockDetectorModel> detector = dservice.createRunnableDevice(dmodel);
+
+		
+		final ScanModel  smodel = new ScanModel();
+		smodel.setPositionIterable(iterable);
+		smodel.setDetectors(detector);
+		smodel.setBean(new ScanBean());
+		
+		// Create a scan and run it without publishing events
+		IRunnableDevice<ScanModel> scanner = dservice.createRunnableDevice(smodel);
+		scanner.run(null);
+
+		// Check that using IDeviceDependentIterable, five means five.
+		assertTrue("The iterator should be asked "+iterable.size()+" times for position and is was asked "+iterable.getTotalPositions(),
+				    iterable.getTotalPositions()==iterable.size());
+	}
+
+	private class PausingIterable implements Iterable<IPosition>, IDeviceDependentIterable {
+		
+		private int totalPositions = 0;
+		private int size;
+
+		public PausingIterable(int i) {
+			this.size = i;
+		}
+
+		@Override
+		public Iterator<IPosition> iterator() {
+			return new Iterator<IPosition>() {
+
+				private int count = 0;
+				@Override
+				public boolean hasNext() {
+					return count<size;
+				}
+
+				@Override
+				public IPosition next() {
+					MapPosition next = new MapPosition();
+					next.put("x", count);
+					next.put("y", count);
+					++count;
+					++totalPositions;
+
+					System.out.println("Next position is "+next);
+					if (count%2==0) {
+						long amount = count*100;
+						System.out.println("Sleeping for "+amount+" while we get to it.");
+						try {
+							Thread.sleep(amount); // 200, 400
+						} catch (InterruptedException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+					}
+
+					return next;
+				}
+
+			};
+		}
+
+		public int getTotalPositions() {
+			return totalPositions;
+		}
+
+		@Override
+		public int size() {
+			return size;
+		}
+		
+		@Override
+		public List<String> getScannableNames() {
+			return Arrays.asList("x", "y");
+		}
+	} 
 
 }

@@ -6,6 +6,7 @@ import java.util.EventListener;
 import org.eclipse.scanning.api.INameable;
 import org.eclipse.scanning.api.event.core.IConsumer;
 import org.eclipse.scanning.api.event.core.IPublisher;
+import org.eclipse.scanning.api.event.core.IQueueReader;
 import org.eclipse.scanning.api.event.core.IRequester;
 import org.eclipse.scanning.api.event.core.IResponder;
 import org.eclipse.scanning.api.event.core.ISubmitter;
@@ -33,7 +34,7 @@ import org.eclipse.scanning.api.event.status.StatusBean;
  *   IEventService service = ... // OSGi
  *   final IEventSubscriber subscriber = service.createSubscriber(...);
  *   
- *   IScanListener listener = new IScanListener.Stub() { // Listen to any scan
+ *   IScanListener listener = new IScanListener() { // Listen to any scan
  *       void scanEventPerformed(ScanEvent evt) {
  *           ScanBean scan = evt.getBean();
  *           System.out.println(scan.getName()+" @ "+scan.getPercentComplete());
@@ -61,52 +62,20 @@ import org.eclipse.scanning.api.event.status.StatusBean;
  * @author Matthew Gerring
  *
  */
-public interface IEventService {
-
-    /**
-     * The default topic used for scan events
-     */
-	public static final String SCAN_TOPIC      = "org.eclipse.scanning.scan.topic";
-    /**
-     * The default topic used for scan events
-     */
-	public static final String STATUS_TOPIC      = "org.eclipse.scanning.status.topic";
+public interface IEventService extends EventConstants {
 	
-	/**
-	 * The default topic used for heartbeat events.
-	 */
-	public static final String HEARTBEAT_TOPIC = "org.eclipse.scanning.alive.topic";
 	
-	/**
-	 * The default topic used for terminate events.
-	 */
-	public static final String CMD_TOPIC = "org.eclipse.scanning.command.topic";
-
-	/**
-	 * The default queue used for holding status events.
-	 */
-	public static final String SUBMISSION_QUEUE = "org.eclipse.scanning.submission.queue";
-
-	/**
-	 * The default queue used for holding status events.
-	 */
-	public static final String STATUS_SET = "org.eclipse.scanning.status.set";
+    /**
+     * Create an object capable of getting a queue of any objects. NOTE that
+     * an ISubmitter is an IQueueConnection but it only manages queues of
+     * StatusBeans.
+     * 
+     * @param uri
+     * @param queueName
+     * @return
+     */
+	public <T> IQueueReader<T> createQueueReader(URI uri, String queueName);
 	
-	/**
-	 * Topic used to tell UI users that a give consumer will be going down.
-	 */
-	public static final String ADMIN_MESSAGE_TOPIC = "org.eclipse.scanning.consumer.administratorMessage";
-
-    /**
-     * The default topic used for requests. It is better to use your own topic rather than the default.
-     */
-	public static final String REQUEST_TOPIC      = "org.eclipse.scanning.request.topic";
-
-    /**
-     * The default topic used for responses. It is better to use your own topic rather than the default.
-     */
-	public static final String RESPONSE_TOPIC      = "org.eclipse.scanning.response.topic";
-
 	/**
 	 * Creates an ISubscriber with the default scan event topic and default heartbeat topic.
 	 * Useful on the client for adding event listeners to be notified.

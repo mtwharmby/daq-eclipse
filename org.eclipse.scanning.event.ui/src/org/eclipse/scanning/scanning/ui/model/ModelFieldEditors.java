@@ -30,10 +30,10 @@ import org.eclipse.richbeans.widgets.cell.CComboWithEntryCellEditorData;
 import org.eclipse.richbeans.widgets.cell.NumberCellEditor;
 import org.eclipse.richbeans.widgets.file.FileDialogCellEditor;
 import org.eclipse.richbeans.widgets.table.TextCellEditorWithContentProposal;
-import org.eclipse.scanning.api.annotation.FieldDescriptor;
-import org.eclipse.scanning.api.annotation.FieldUtils;
-import org.eclipse.scanning.api.annotation.FieldValue;
-import org.eclipse.scanning.api.annotation.FileType;
+import org.eclipse.scanning.api.annotation.ui.FieldDescriptor;
+import org.eclipse.scanning.api.annotation.ui.FieldUtils;
+import org.eclipse.scanning.api.annotation.ui.FieldValue;
+import org.eclipse.scanning.api.annotation.ui.FileType;
 import org.eclipse.scanning.event.ui.ServiceHolder;
 import org.eclipse.scanning.scanning.ui.util.PageUtil;
 import org.eclipse.swt.SWT;
@@ -74,7 +74,6 @@ public class ModelFieldEditors {
 			try {
 				clazz = field.getType();
 			} catch (NoSuchFieldException | SecurityException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 			

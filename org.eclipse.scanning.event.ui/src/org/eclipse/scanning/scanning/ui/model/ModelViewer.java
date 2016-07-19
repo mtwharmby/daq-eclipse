@@ -24,8 +24,8 @@ import org.eclipse.jface.viewers.TableViewerEditor;
 import org.eclipse.jface.viewers.TableViewerFocusCellManager;
 import org.eclipse.jface.viewers.Viewer;
 import org.eclipse.richbeans.widgets.table.ISeriesItemDescriptor;
-import org.eclipse.scanning.api.annotation.FieldUtils;
-import org.eclipse.scanning.api.annotation.FieldValue;
+import org.eclipse.scanning.api.annotation.ui.FieldUtils;
+import org.eclipse.scanning.api.annotation.ui.FieldValue;
 import org.eclipse.scanning.api.event.scan.DeviceInformation;
 import org.eclipse.scanning.api.points.IPointGenerator;
 import org.eclipse.scanning.api.points.models.IScanPathModel;
@@ -253,7 +253,7 @@ public class ModelViewer implements ISelectionListener, ISelectionChangedListene
 	 * Specifically set the operation we would like to edit
 	 * @param des
 	 */
-	public void setGenerator(IPointGenerator<?, ?> gen) {
+	public void setGenerator(IPointGenerator<?> gen) {
 		if (viewer.getTable().isDisposed()) return;
 		viewer.setInput(gen);
 		if (gen == null) return;
@@ -285,7 +285,7 @@ public class ModelViewer implements ISelectionListener, ISelectionChangedListene
 				
 				Object model = null;
 				if (inputElement instanceof IPointGenerator) {
-					IPointGenerator<IScanPathModel,?> op = (IPointGenerator<IScanPathModel,?>)inputElement;
+					IPointGenerator<IScanPathModel> op = (IPointGenerator<IScanPathModel>)inputElement;
 					model = op.getModel();
 				} else {
 					model = inputElement;

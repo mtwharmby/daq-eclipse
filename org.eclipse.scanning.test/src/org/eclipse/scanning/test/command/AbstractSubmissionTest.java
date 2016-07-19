@@ -1,9 +1,7 @@
 package org.eclipse.scanning.test.command;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -24,7 +22,6 @@ public abstract class AbstractSubmissionTest extends AbstractJythonTest {
 
 	protected static IEventService eservice;
 	protected IConsumer<ScanBean> consumer;
-	private String brokerUri = "vm://localhost?broker.persistent=false";
 
 	private static BlockingQueue<String> testLog;
 	// We'll use this to check that things happen in the right order.
@@ -36,11 +33,11 @@ public abstract class AbstractSubmissionTest extends AbstractJythonTest {
 	protected abstract void setUpEventService();
 
 	@Before
-	public void createTestEnvironment() throws EventException, URISyntaxException {
+	public void start() throws Exception {
 
 		setUpEventService();
 
-		consumer = eservice.createConsumer(URI.create(brokerUri),
+		consumer = eservice.createConsumer(uri,
 				IEventService.SUBMISSION_QUEUE,
 				IEventService.STATUS_SET,
 				IEventService.STATUS_TOPIC,
@@ -78,22 +75,22 @@ public abstract class AbstractSubmissionTest extends AbstractJythonTest {
 
 	@Test
 	public void testSubmission() throws InterruptedException {
-		pi.exec("submit(sr, broker_uri='"+brokerUri+"')");
-		testLog.put("Jython command returned.");
-
-		// Jython returns *before* scan is complete.
-		assertEquals("Jython command returned.", testLog.take());
-		assertEquals("Scan complete.", testLog.take());
-	}
-
-	@Test
-	public void testBlockingSubmission() throws InterruptedException {
-		pi.exec("submit(sr, block=True, broker_uri='"+brokerUri+"')");
+		pi.exec("submit(sr, broker_uri='"+uri+"')");
 		testLog.put("Jython command returned.");
 
 		// Jython returns *after* scan is complete.
 		assertEquals("Scan complete.", testLog.take());
 		assertEquals("Jython command returned.", testLog.take());
+	}
+
+	@Test
+	public void testNonBlockingSubmission() throws InterruptedException {
+		pi.exec("submit(sr, block=False, broker_uri='"+uri+"')");
+		testLog.put("Jython command returned.");
+
+		// Jython returns *before* scan is complete.
+		assertEquals("Jython command returned.", testLog.take());
+		assertEquals("Scan complete.", testLog.take());
 	}
 
 }

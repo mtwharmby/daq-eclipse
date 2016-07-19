@@ -3,6 +3,7 @@ package org.eclipse.scanning.sequencer;
 import java.util.Collection;
 import java.util.concurrent.Callable;
 
+import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IRunnableDevice;
 import org.eclipse.scanning.api.device.IRunnableEventDevice;
 import org.eclipse.scanning.api.device.IWritableDetector;
@@ -23,6 +24,13 @@ import org.eclipse.scanning.api.scan.ScanningException;
  */
 final class DeviceWriter extends DeviceRunner {
 
+	/**
+	 * Checks each detector to find the maximum time
+	 * that the await call should block for before
+	 * the csan is terminated.
+	 * 
+	 * @param detectors
+	 */
 	DeviceWriter(Collection<IRunnableDevice<?>> detectors) {	
 		super(detectors);
 	}
@@ -55,7 +63,7 @@ final class DeviceWriter extends DeviceRunner {
 						((IRunnableEventDevice)detector).fireWritePerformed(position);
 					}
 				}
-				return position;
+				return null; // faster if not adding new information
 				
 			} catch (Exception ne) {
 				abort(detector, null, position, ne);

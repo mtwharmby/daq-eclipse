@@ -1,6 +1,7 @@
 package org.eclipse.scanning.event.queues.beans;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 import org.eclipse.scanning.api.device.models.IDetectorModel;
@@ -21,16 +22,15 @@ import org.eclipse.scanning.api.points.models.IScanPathModel;
  */
 public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	
-	private Collection<IScanPathModel> pathModels;
+	private List<IScanPathModel> pathModels;
 	private Collection<String> monitors;
-	private Map<String,IDetectorModel> detectorModels;
+	private Map<String,Object> detectorModels;
 //	private IProcess perPointProcess;//TODO
 	private String queueMessage;
 	
 	private String scanSubmitQueueName;
-	private String scanStatusQueueName;
 	private String scanStatusTopicName;
-	private String scanConsumerURI;
+	private String scanBrokerURI;
 	
 	/**
 	 * No arg constructor for JSON
@@ -48,7 +48,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	 * @param dMods Map<String,IDetectorModel> containing the detector 
 	 *              configuration for the scan.
 	 */
-	public ScanAtom(String scName, Collection<IScanPathModel> pMods, Map<String,IDetectorModel> dMods) {
+	public ScanAtom(String scName, List<IScanPathModel> pMods, Map<String,Object> dMods) {
 		super();
 		setName(scName);
 		pathModels = pMods;
@@ -65,7 +65,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	 *              configuration for the scan.
 	 * @param mons List<String> names of monitors to use during scan.
 	 */
-	public ScanAtom(String scName, Collection<IScanPathModel> pMods, Map<String,IDetectorModel> dMods, Collection<String> mons) {
+	public ScanAtom(String scName, List<IScanPathModel> pMods, Map<String,Object> dMods, Collection<String> mons) {
 		this(scName, pMods, dMods);
 		monitors = mons;
 	}
@@ -75,7 +75,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	 * 
 	 * @return Collection<IScanPathModel> models of motor moves.
 	 */
-	public Collection<IScanPathModel> getPathModels() {
+	public List<IScanPathModel> getPathModels() {
 		return pathModels;
 	}
 
@@ -84,7 +84,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	 * 
 	 * @param pathModels Collection<IScanPathModel> models of motor moves.
 	 */
-	public void setPathModels(Collection<IScanPathModel> pathModels) {
+	public void setPathModels(List<IScanPathModel> pathModels) {
 		this.pathModels = pathModels;
 	}
 	
@@ -152,7 +152,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	 * @return Map<String, IDetectorModel> Key String names of detectors and 
 	 *         detector models.
 	 */
-	public Map<String, IDetectorModel> getDetectorModels() {
+	public Map<String, Object> getDetectorModels() {
 		return detectorModels;
 	}
 
@@ -163,7 +163,7 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 	 * @param Map<String, IDetectorModel> Key String names of detectors and 
 	 *         detector models.
 	 */
-	public void setDetectorModels(Map<String, IDetectorModel> detModels) {
+	public void setDetectorModels(Map<String, Object> detModels) {
 		this.detectorModels = detModels;
 	}
 	
@@ -206,14 +206,6 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 		this.scanSubmitQueueName = scanSubmitQueueName;
 	}
 
-	public String getScanStatusQueueName() {
-		return scanStatusQueueName;
-	}
-
-	public void setScanStatusQueueName(String scanStatusQueueName) {
-		this.scanStatusQueueName = scanStatusQueueName;
-	}
-
 	public String getScanStatusTopicName() {
 		return scanStatusTopicName;
 	}
@@ -222,40 +214,25 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 		this.scanStatusTopicName = scanStatusTopicName;
 	}
 
-	public String getScanConsumerURI() {
-		return scanConsumerURI;
+	public String getScanBrokerURI() {
+		return scanBrokerURI;
 	}
 
-	public void setScanConsumerURI(String scanConsumerURI) {
-		this.scanConsumerURI = scanConsumerURI;
+	public void setScanBrokerURI(String scanBrokerURI) {
+		this.scanBrokerURI = scanBrokerURI;
 	}
 
 	@Override
 	public int hashCode() {
 		final int prime = 31;
 		int result = super.hashCode();
-		result = prime * result
-				+ ((detectorModels == null) ? 0 : detectorModels.hashCode());
-		result = prime * result
-				+ ((monitors == null) ? 0 : monitors.hashCode());
-		result = prime * result
-				+ ((pathModels == null) ? 0 : pathModels.hashCode());
-		result = prime * result
-				+ ((queueMessage == null) ? 0 : queueMessage.hashCode());
-		result = prime * result
-				+ ((scanConsumerURI == null) ? 0 : scanConsumerURI.hashCode());
-		result = prime
-				* result
-				+ ((scanStatusQueueName == null) ? 0 : scanStatusQueueName
-						.hashCode());
-		result = prime
-				* result
-				+ ((scanStatusTopicName == null) ? 0 : scanStatusTopicName
-						.hashCode());
-		result = prime
-				* result
-				+ ((scanSubmitQueueName == null) ? 0 : scanSubmitQueueName
-						.hashCode());
+		result = prime * result + ((detectorModels == null) ? 0 : detectorModels.hashCode());
+		result = prime * result + ((monitors == null) ? 0 : monitors.hashCode());
+		result = prime * result + ((pathModels == null) ? 0 : pathModels.hashCode());
+		result = prime * result + ((queueMessage == null) ? 0 : queueMessage.hashCode());
+		result = prime * result + ((scanBrokerURI == null) ? 0 : scanBrokerURI.hashCode());
+		result = prime * result + ((scanStatusTopicName == null) ? 0 : scanStatusTopicName.hashCode());
+		result = prime * result + ((scanSubmitQueueName == null) ? 0 : scanSubmitQueueName.hashCode());
 		return result;
 	}
 
@@ -288,15 +265,10 @@ public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
 				return false;
 		} else if (!queueMessage.equals(other.queueMessage))
 			return false;
-		if (scanConsumerURI == null) {
-			if (other.scanConsumerURI != null)
+		if (scanBrokerURI == null) {
+			if (other.scanBrokerURI != null)
 				return false;
-		} else if (!scanConsumerURI.equals(other.scanConsumerURI))
-			return false;
-		if (scanStatusQueueName == null) {
-			if (other.scanStatusQueueName != null)
-				return false;
-		} else if (!scanStatusQueueName.equals(other.scanStatusQueueName))
+		} else if (!scanBrokerURI.equals(other.scanBrokerURI))
 			return false;
 		if (scanStatusTopicName == null) {
 			if (other.scanStatusTopicName != null)

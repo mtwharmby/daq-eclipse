@@ -5,7 +5,6 @@ import org.junit.runners.Suite.SuiteClasses;
 
 @RunWith(org.junit.runners.Suite.class)
 @SuiteClasses({
-	QueueNameMapTest.class,
 	SizeLimitedRecorderTest.class
 })
 public class Suite {

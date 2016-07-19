@@ -20,7 +20,6 @@ import org.eclipse.scanning.api.malcolm.IMalcolmService;
 import org.eclipse.scanning.api.points.GeneratorException;
 import org.eclipse.scanning.api.points.IPointGenerator;
 import org.eclipse.scanning.api.points.IPointGeneratorService;
-import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.points.models.BoundingBox;
 import org.eclipse.scanning.api.points.models.GridModel;
 import org.eclipse.scanning.api.points.models.StepModel;
@@ -28,6 +27,7 @@ import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.api.scan.event.IRunListener;
 import org.eclipse.scanning.api.scan.event.RunEvent;
 import org.eclipse.scanning.api.scan.models.ScanModel;
+import org.eclipse.scanning.test.BrokerTest;
 import org.eclipse.scanning.test.scan.mock.MockDetectorModel;
 import org.junit.Test;
 
@@ -39,7 +39,7 @@ import org.junit.Test;
  * @author fri44821
  *
  */
-public class ScanExecutionTest {
+public class ScanExecutionTest extends BrokerTest {
 	
 	private static IEventService     eventService;
 	private static IPointGeneratorService generatorService;
@@ -62,7 +62,7 @@ public class ScanExecutionTest {
 	
 	/**
 	 * 
-	 * @param uri - for activemq, for instance "vm://localhost?broker.persistent=false"
+	 * @param uri - for activemq, for instance BrokerTest.uri
 	 * @throws URISyntaxException 
 	 * @throws EventException 
 	 */
@@ -90,7 +90,7 @@ public class ScanExecutionTest {
 		IWritableDetector<?> detector = (IWritableDetector<?>) runnableDeviceService.createRunnableDevice(dmodel);
 		assertNotNull(detector);
 		
-		detector.addRunListener(new IRunListener.Stub() {
+		detector.addRunListener(new IRunListener() {
 			@Override
 			public void runPerformed(RunEvent evt) throws ScanningException{
                 System.out.println("Ran detector @ "+evt.getPosition());
@@ -112,7 +112,7 @@ public class ScanExecutionTest {
 		gmodel.setSlowAxisPoints(size[size.length-1]);
 		gmodel.setBoundingBox(new BoundingBox(0,0,2,2));
 		
-		IPointGenerator<?,IPosition> gen = generatorService.createGenerator(gmodel);
+		IPointGenerator<?> gen = generatorService.createGenerator(gmodel);
 		
 		// We add the outer scans, if any
 		if (size.length > 2) { 
@@ -123,7 +123,7 @@ public class ScanExecutionTest {
 				} else {
 					model = new StepModel("neXusScannable"+(dim+1), 10,20,30); // Will generate one value at 10
 				}
-				final IPointGenerator<?,IPosition> step = generatorService.createGenerator(model);
+				final IPointGenerator<?> step = generatorService.createGenerator(model);
 				gen = generatorService.createCompoundGenerator(step, gen);
 			}
 		}
@@ -142,8 +142,8 @@ public class ScanExecutionTest {
 		// Create a scan and run it without publishing events
 		IRunnableDevice<ScanModel> scanner = runnableDeviceService.createRunnableDevice(smodel, null);
 		
-		final IPointGenerator<?,IPosition> fgen = gen;
-		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener.Stub() {
+		final IPointGenerator<?> fgen = gen;
+		((IRunnableEventDevice<ScanModel>)scanner).addRunListener(new IRunListener() {
 			@Override
 			public void runWillPerform(RunEvent evt) throws ScanningException{
                 try {

@@ -34,6 +34,7 @@ import org.eclipse.scanning.event.EventServiceImpl;
 import org.eclipse.scanning.points.PointGeneratorFactory;
 import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
 import org.eclipse.scanning.sequencer.RunnableDeviceServiceImpl;
+import org.eclipse.scanning.test.BrokerTest;
 import org.eclipse.scanning.test.scan.mock.MockDetectorModel;
 import org.eclipse.scanning.test.scan.mock.MockScannableConnector;
 import org.eclipse.scanning.test.scan.mock.MockWritableDetector;
@@ -45,7 +46,7 @@ import org.junit.Test;
 
 import uk.ac.diamond.daq.activemq.connector.ActivemqConnectorService;
 
-public class ThreadScanTest {
+public class ThreadScanTest extends BrokerTest {
 	
 	private IRunnableDeviceService           sservice;
 	private IDeviceConnectorService    connector;
@@ -72,8 +73,8 @@ public class ThreadScanTest {
 		eservice   = new EventServiceImpl(new ActivemqConnectorService());
 		// Use in memory broker removes requirement on network and external ActiveMQ process
 		// http://activemq.apache.org/how-to-unit-test-jms-code.html
-		subscriber = eservice.createSubscriber(new URI("vm://localhost?broker.persistent=false"), IEventService.SCAN_TOPIC); // Create an in memory consumer of messages.
-		publisher  = eservice.createPublisher(new URI("vm://localhost?broker.persistent=false"), IEventService.SCAN_TOPIC);
+		subscriber = eservice.createSubscriber(uri, IEventService.SCAN_TOPIC); // Create an in memory consumer of messages.
+		publisher  = eservice.createPublisher(uri, IEventService.SCAN_TOPIC);
 	}
 	
 	@After
@@ -105,7 +106,7 @@ public class ThreadScanTest {
 		final List<Throwable> exceptions = new ArrayList<>(1);
 		runDeviceInThread(device, exceptions);
 		
-		subscriber.addListener(new IScanListener.Stub() {
+		subscriber.addListener(new IScanListener() {
 			@Override
 			public void scanEventPerformed(ScanEvent e) {
 			    if (e.getBean().getMessage()!=null) System.out.println(e.getBean().getMessage());
@@ -179,8 +180,8 @@ public class ThreadScanTest {
 		final CountDownLatch latch = new CountDownLatch(1);
 		// Use in memory broker removes requirement on network and external ActiveMQ process
 		// http://activemq.apache.org/how-to-unit-test-jms-code.html
-		ISubscriber<IScanListener> subscriber = eservice.createSubscriber(new URI("vm://localhost?broker.persistent=false"), IEventService.SCAN_TOPIC); // Create an in memory consumer of messages.
-		subscriber.addListener(new IScanListener.Stub() {
+		ISubscriber<IScanListener> subscriber = eservice.createSubscriber(uri, IEventService.SCAN_TOPIC); // Create an in memory consumer of messages.
+		subscriber.addListener(new IScanListener() {
 			@Override
 			public void scanStateChanged(ScanEvent evt) {
 				ScanBean bean = evt.getBean();
@@ -195,7 +196,7 @@ public class ThreadScanTest {
 
 	protected void createPauseEventListener(IRunnableDevice<?> device, final List<ScanBean> beans) throws EventException, URISyntaxException {
 		
-		subscriber.addListener(new IScanListener.Stub() {
+		subscriber.addListener(new IScanListener() {
 			@Override
 			public void scanStateChanged(ScanEvent evt) {
 				ScanBean bean = evt.getBean();
@@ -219,7 +220,7 @@ public class ThreadScanTest {
 		gmodel.setSlowAxisPoints(rows);
 		gmodel.setFastAxisPoints(columns);
 		gmodel.setBoundingBox(new BoundingBox(0,0,3,3));	
-		IPointGenerator<?,IPosition> gen = gservice.createGenerator(gmodel);
+		IPointGenerator<?> gen = gservice.createGenerator(gmodel);
 
 		// Create the model for a scan.
 		final ScanModel  smodel = new ScanModel();
