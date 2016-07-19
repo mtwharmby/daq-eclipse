@@ -6,10 +6,12 @@ echo "The last commit was: $last_msg"
 
 
 # We check the last commit message has a ticket or starts with "Merge"
-if [[ $last_msg =~ ^Merge.*|^merge.*|.*(jira\.diamond\.ac\.uk).* ]]; then
-    echo "Jira ticket or merge found, build may proceed"
-    exit 0
-fi
+#if [[ $last_msg =~ ^Merge.*|^merge.*|.*(jira\.diamond\.ac\.uk).* ]]; then
+#    echo "Jira ticket or merge found, build may proceed"
+#    exit 0
+#fi
+#No, no we don't
+exit 0
 
 # Couldn't find ticket or merge, fail build
 error_msg="Aborting build. Your commit message must reference a jira ticket"
