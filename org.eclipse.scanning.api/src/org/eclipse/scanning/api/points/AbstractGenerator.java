@@ -4,7 +4,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import org.eclipse.scanning.api.points.models.IScanPathModel;
+import org.eclipse.scanning.api.ModelValidationException;
+import org.eclipse.scanning.api.points.models.AbstractBoundingBoxModel;
 
 /**
  * 
@@ -13,10 +14,11 @@ import org.eclipse.scanning.api.points.models.IScanPathModel;
  * @param <T>
  * @param <P>
  */
-public abstract class AbstractGenerator<T extends IScanPathModel> implements IPointGenerator<T>, Iterable<IPosition> {
+public abstract class AbstractGenerator<T> implements IPointGenerator<T>, Iterable<IPosition> {
 
-	protected T model;
-	protected List<IPointContainer<?>> containers;
+	protected volatile T model; // Because of the validateModel() method
+	
+	protected List<IPointContainer> containers;
 	private String id;
 	private String label;
 	private String description;
@@ -51,15 +53,46 @@ public abstract class AbstractGenerator<T extends IScanPathModel> implements IPo
 
 	protected abstract Iterator<IPosition> iteratorFromValidModel();
 
+
 	/**
 	 * If the given model is considered "invalid", this method throws a 
-	 * PointsValidationException explaining why it is considered invalid.
+	 * ModelValidationException explaining why it is considered invalid.
 	 * Otherwise, just returns. A model should be considered invalid if its
 	 * parameters would cause the generator implementation to hang or crash.
 	 * 
 	 * @throw exception if model invalid
 	 */
-	protected abstract void validateModel() throws PointsValidationException;
+	protected void validateModel() {
+		T model = getModel();
+		if (model instanceof AbstractBoundingBoxModel) {
+			AbstractBoundingBoxModel bmodel = (AbstractBoundingBoxModel)model;
+			// As implemented, model width and/or height can be negative,
+			// and this flips the slow and/or fast point order.
+			if (bmodel.getBoundingBox() == null) throw new ModelValidationException("The model must have a Bounding Box!", model, "boundingBox");
+	        if (bmodel.getBoundingBox().getFastAxisLength()==0)  throw new ModelValidationException("The length must not be 0!", bmodel, "boundingBox");
+	        if (bmodel.getBoundingBox().getSlowAxisLength()==0)  throw new ModelValidationException("The length must not be 0!", bmodel, "boundingBox");
+		}
+	}
+
+	/**
+	 * The AbstractGenerator has a no argument validateModel() method which
+	 * generators have implemented to validate models.
+	 * Therefore the model is temporarily set in order to check it.
+	 * In order to make that thread safe, model is marked as volatile.
+	 */
+	@Override
+	public void validate(T model) throws ModelValidationException {
+		T orig = this.getModel();
+		try {
+			setModel(model);
+			validateModel();
+			
+		} catch (SecurityException | IllegalArgumentException e) {
+			throw new ModelValidationException(e);
+		} finally {
+			setModel(orig);
+		}
+	}
 
 	@Override
 	final public int size() throws GeneratorException {
@@ -93,12 +126,13 @@ public abstract class AbstractGenerator<T extends IScanPathModel> implements IPo
 	}
 
 	@Override
-	public List<IPointContainer<?>> getContainers() {
-		return containers;
+	public List<IPointContainer> getContainers() {
+		if (containers!=null) return containers;
+		return null;
 	}
 
 	@Override
-	public void setContainers(List<IPointContainer<?>> containers) throws GeneratorException {
+	public void setContainers(List<IPointContainer> containers) throws GeneratorException {
 		this.containers = containers;
 	}
 	
@@ -108,11 +142,11 @@ public abstract class AbstractGenerator<T extends IScanPathModel> implements IPo
 	 * @param x
 	 * @param y
 	 */
-	public boolean containsPoint(double x, double y) {
+	public boolean containsPoint(IPosition point) {
 		if (containers==null)    return true;
 		if (containers.size()<1) return true;
-		for (IPointContainer<?> container : containers) {
-			if (container.containsPoint(x, y)) return true;
+		for (IPointContainer container : containers) {
+			if (container.containsPoint(point)) return true;
 		}
 		return false;
 	}

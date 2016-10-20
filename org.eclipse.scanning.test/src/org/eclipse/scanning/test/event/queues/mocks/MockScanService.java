@@ -2,10 +2,11 @@ package org.eclipse.scanning.test.event.queues.mocks;
 
 import java.util.Collection;
 
-import org.eclipse.scanning.api.device.IDeviceConnectorService;
+import org.eclipse.scanning.api.device.IScannableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableDevice;
 import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.event.core.IPublisher;
+import org.eclipse.scanning.api.event.scan.DeviceInformation;
 import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.api.scan.event.IPositioner;
@@ -60,19 +61,24 @@ public class MockScanService implements IRunnableDeviceService {
 		return null;
 	}
 
-	@Override
-	public Collection<Class<?>> getRunnableDeviceModels()
-			throws ScanningException {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
 	public IPositioner getPositioner() {
 		return poser;
 	}
 
 	@Override
-	public IDeviceConnectorService getDeviceConnectorService() {
+	public IScannableDeviceService getDeviceConnectorService() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Collection<DeviceInformation<?>> getDeviceInformation() throws ScanningException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public DeviceInformation<?> getDeviceInformation(String name) throws ScanningException {
 		// TODO Auto-generated method stub
 		return null;
 	}

@@ -22,6 +22,7 @@ import org.eclipse.scanning.api.points.models.BoundingBox;
 import org.eclipse.scanning.api.points.models.GridModel;
 import org.eclipse.scanning.event.EventServiceImpl;
 import org.eclipse.scanning.points.PointGeneratorFactory;
+import org.eclipse.scanning.points.ScanPointGeneratorFactory;
 import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
 import org.eclipse.scanning.test.BrokerTest;
 import org.junit.Before;
@@ -96,7 +97,7 @@ public class MappingScanTest extends BrokerTest{
 		box.setFastAxisLength(5);
 		box.setSlowAxisLength(2);
 
-		final GridModel model = new GridModel();
+		final GridModel model = new GridModel("x", "y");
 		model.setSlowAxisPoints(2);
 		model.setFastAxisPoints(5);
 		model.setBoundingBox(box);

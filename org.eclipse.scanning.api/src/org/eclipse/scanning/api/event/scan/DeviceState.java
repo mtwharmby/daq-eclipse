@@ -10,7 +10,8 @@ package org.eclipse.scanning.api.event.scan;
  */
 public enum DeviceState {
 
-	FAULT, IDLE, CONFIGURING, READY, RUNNING, PAUSING, PAUSED, ABORTING, ABORTED;
+	RESETTING,IDLE,READY,CONFIGURING,PRERUN,RUNNING,POSTRUN,PAUSED,SEEKING,ABORTING,ABORTED,FAULT,DISABLING,DISABLED;
+
 	/**
 	 * The run method may be called
 	 * @return
@@ -20,7 +21,7 @@ public enum DeviceState {
 	}
 	
 	public boolean isRunning() {
-		return this==RUNNING || this==PAUSED || this==PAUSING;
+		return this==RUNNING || this==PAUSED || this==SEEKING || this==PRERUN || this==POSTRUN;
 	}
 
 	/**
@@ -32,22 +33,22 @@ public enum DeviceState {
 	}
 
 	public boolean isRest() {
-		return this==FAULT || this==IDLE || this == CONFIGURING || this == READY || this == ABORTED;
+		return this==FAULT || this==IDLE || this==CONFIGURING || this==READY || this==ABORTED || this==DISABLED;
 	}
 
 	public boolean isAbortable() {
-		return this==RUNNING || this==CONFIGURING || this == PAUSED || this == PAUSING || this == READY;
+		return this==RUNNING || this==CONFIGURING || this==PAUSED || this==SEEKING || this==READY || this==PRERUN || this==POSTRUN;
 	}
 	
 	public boolean isResetable() {
-		return this==FAULT || this==ABORTED;
+		return this==FAULT || this==ABORTED || this==DISABLED || this==READY;
 	}
 
 	public boolean isTransient() {
-		return this==RUNNING || this==CONFIGURING || this==ABORTING || this==PAUSING;
+		return this==RUNNING || this==CONFIGURING || this==ABORTING || this==SEEKING || this==DISABLING || this==PRERUN || this==POSTRUN;
 	}
 
 	public boolean isRestState() {
-		return this==IDLE||this==READY||this==FAULT||this==ABORTED;
+		return this==IDLE || this==READY || this==FAULT || this==ABORTED || this==DISABLED;
 	}
 }

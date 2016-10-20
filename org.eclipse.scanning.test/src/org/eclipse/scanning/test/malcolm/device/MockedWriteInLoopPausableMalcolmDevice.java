@@ -5,15 +5,15 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
-import org.eclipse.dawnsci.analysis.api.dataset.IDataset;
-import org.eclipse.dawnsci.analysis.api.dataset.ILazyWriteableDataset;
-import org.eclipse.dawnsci.analysis.api.monitor.IMonitor;
 import org.eclipse.dawnsci.analysis.api.tree.GroupNode;
-import org.eclipse.dawnsci.analysis.dataset.impl.Dataset;
-import org.eclipse.dawnsci.analysis.dataset.impl.LazyWriteableDataset;
-import org.eclipse.dawnsci.analysis.dataset.impl.Random;
 import org.eclipse.dawnsci.hdf5.nexus.NexusFileFactoryHDF5;
 import org.eclipse.dawnsci.nexus.NexusFile;
+import org.eclipse.january.IMonitor;
+import org.eclipse.january.dataset.Dataset;
+import org.eclipse.january.dataset.IDataset;
+import org.eclipse.january.dataset.ILazyWriteableDataset;
+import org.eclipse.january.dataset.LazyWriteableDataset;
+import org.eclipse.january.dataset.Random;
 import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.malcolm.MalcolmDeviceException;
 import org.eclipse.scanning.api.malcolm.event.MalcolmEventBean;
@@ -90,13 +90,13 @@ public class MockedWriteInLoopPausableMalcolmDevice extends LoopingMockedMalcolm
 	}
 
 	@Override
-	public MapMalcolmDetectorModel validate(MapMalcolmDetectorModel model) throws MalcolmDeviceException {
+	public void validate(MapMalcolmDetectorModel model) throws MalcolmDeviceException {
 		Map<String, Object> params = model.getParameterMap();
 		if (!params.containsKey("shape")) throw new MalcolmDeviceException(this, "shape must be set!");
 		if (!params.containsKey("nframes")) throw new MalcolmDeviceException(this, "nframes must be set!");
 		if (!params.containsKey("file")) throw new MalcolmDeviceException(this, "file must be set!");
 		if (!params.containsKey("exposure")) throw new MalcolmDeviceException(this, "exposure must be set!");
-		return null;
+		return;
 	}
 
 	@Override

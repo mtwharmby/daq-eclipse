@@ -1,12 +1,7 @@
 package org.eclipse.scanning.sequencer.analysis;
 
-import org.eclipse.dawnsci.analysis.api.dataset.IDataset;
-import org.eclipse.dawnsci.analysis.api.dataset.ILazyDataset;
-import org.eclipse.dawnsci.analysis.api.dataset.ILazyWriteableDataset;
-import org.eclipse.dawnsci.analysis.api.dataset.SliceND;
 import org.eclipse.dawnsci.analysis.api.io.IDataHolder;
 import org.eclipse.dawnsci.analysis.api.io.ILoaderService;
-import org.eclipse.dawnsci.analysis.api.monitor.IMonitor;
 import org.eclipse.dawnsci.analysis.api.persistence.IPersistenceService;
 import org.eclipse.dawnsci.analysis.api.persistence.IPersistentFile;
 import org.eclipse.dawnsci.analysis.api.processing.IExecutionVisitor;
@@ -14,7 +9,6 @@ import org.eclipse.dawnsci.analysis.api.processing.IOperation;
 import org.eclipse.dawnsci.analysis.api.processing.IOperationContext;
 import org.eclipse.dawnsci.analysis.api.processing.IOperationService;
 import org.eclipse.dawnsci.analysis.api.processing.OperationData;
-import org.eclipse.dawnsci.analysis.dataset.impl.Dataset;
 import org.eclipse.dawnsci.nexus.INexusDevice;
 import org.eclipse.dawnsci.nexus.NXdetector;
 import org.eclipse.dawnsci.nexus.NexusException;
@@ -22,6 +16,12 @@ import org.eclipse.dawnsci.nexus.NexusNodeFactory;
 import org.eclipse.dawnsci.nexus.NexusScanInfo;
 import org.eclipse.dawnsci.nexus.builder.NexusObjectProvider;
 import org.eclipse.dawnsci.nexus.builder.NexusObjectWrapper;
+import org.eclipse.january.IMonitor;
+import org.eclipse.january.dataset.IDataset;
+import org.eclipse.january.dataset.ILazyDataset;
+import org.eclipse.january.dataset.ILazyWriteableDataset;
+import org.eclipse.january.dataset.SliceND;
+import org.eclipse.scanning.api.ModelValidationException;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IWritableDetector;
 import org.eclipse.scanning.api.device.models.ProcessingModel;
@@ -48,6 +48,7 @@ public class ProcessingRunnableDevice extends AbstractRunnableDevice<ProcessingM
 
 	public ProcessingRunnableDevice() {
 		setLevel(100); // Runs at the end of the cycle by default.
+		this.model = new ProcessingModel(); // We start with an empty one in case they want to fill it in the UI.
 	}
 	
 	public NexusObjectProvider<NXdetector> getNexusProvider(NexusScanInfo info) throws NexusException {
@@ -63,13 +64,21 @@ public class ProcessingRunnableDevice extends AbstractRunnableDevice<ProcessingM
 
 		return nexusProvider;
 	}
+	
+	@Override
+	public void validate(ProcessingModel model) throws Exception {
+		if (model.getDataFile()==null) throw new ModelValidationException("The data file must be set!", model, "dataFile");
+		if (model.getOperationsFile()==null) throw new ModelValidationException("The operation file must be set!", model, "operationsFile");
+		if (model.getDetectorName()==null) throw new ModelValidationException("The detector name must be set!", model, "detectorName");
+		if (model.getTimeout()<=0) throw new ModelValidationException("The timeout must be greater than 0", model, "timeout");
+	}
 
 	public NXdetector createNexusObject(NexusScanInfo info)  throws NexusException {
 		
 		final NXdetector detector = NexusNodeFactory.createNXdetector();
 		
 		// TODO Hard coded to images
-		this.processed = detector.initializeLazyDataset(NXdetector.NX_DATA,  info.getRank()+2, Dataset.FLOAT64);
+		this.processed = detector.initializeLazyDataset(NXdetector.NX_DATA, info.getRank()+2, Double.class);
 		this.info      = info;		
 		
 		Attributes.registerAttributes(detector, this);

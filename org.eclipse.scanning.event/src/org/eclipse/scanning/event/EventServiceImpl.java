@@ -1,7 +1,10 @@
 package org.eclipse.scanning.event;
 
+import java.lang.ref.SoftReference;
 import java.net.URI;
 import java.util.EventListener;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.eclipse.scanning.api.INameable;
 import org.eclipse.scanning.api.event.EventConstants;
@@ -10,14 +13,15 @@ import org.eclipse.scanning.api.event.IEventConnectorService;
 import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.event.IdBean;
 import org.eclipse.scanning.api.event.core.IConsumer;
-import org.eclipse.scanning.api.event.core.IRequester;
+import org.eclipse.scanning.api.event.core.IDisconnectable;
 import org.eclipse.scanning.api.event.core.IPublisher;
-import org.eclipse.scanning.api.event.core.IQueueConnection;
 import org.eclipse.scanning.api.event.core.IQueueReader;
+import org.eclipse.scanning.api.event.core.IRequester;
 import org.eclipse.scanning.api.event.core.IResponder;
 import org.eclipse.scanning.api.event.core.ISubmitter;
 import org.eclipse.scanning.api.event.core.ISubscriber;
 import org.eclipse.scanning.api.event.status.StatusBean;
+import org.eclipse.scanning.event.remote.RemoteServiceFactory;
 
 public class EventServiceImpl implements IEventService {
 	
@@ -115,6 +119,40 @@ public class EventServiceImpl implements IEventService {
 	@Override
 	public <T> IQueueReader<T> createQueueReader(URI uri, String queueName) {
 	    return new QueueReaderImpl<T>(uri, queueName, this);
+	}
+	
+	private Map<String, SoftReference<?>> cachedServices;
+
+	@Override
+	public synchronized <T> T createRemoteService(URI uri, Class<T> serviceClass) throws EventException {
+		
+		if (cachedServices==null) cachedServices = new HashMap<>(7);
+		try {
+			String key = ""+uri+serviceClass.getName();
+			if (cachedServices.containsKey(key)) {
+				SoftReference<T> ref = (SoftReference<T>)cachedServices.get(key);
+				if (ref.get()!=null) {
+					T service = ref.get();
+					if (service instanceof IDisconnectable) {
+						IDisconnectable discon = (IDisconnectable)service;
+						if (discon.isDisconnected()) {
+							cachedServices.remove(key);
+							// Drop out of these tests and make a new service.
+						} else {
+							return service;
+						}
+					} else {
+						return service;
+					}
+				}
+			}
+			T service = RemoteServiceFactory.getRemoteService(uri, serviceClass, this);
+			cachedServices.put(key, new SoftReference<T>(service));
+			return service;
+			
+		} catch (InstantiationException | IllegalAccessException e) {
+			throw new EventException("There problem creating service for "+serviceClass, e);
+		}
 	}
 
 }

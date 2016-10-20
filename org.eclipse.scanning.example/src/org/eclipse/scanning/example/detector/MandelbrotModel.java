@@ -3,37 +3,37 @@ package org.eclipse.scanning.example.detector;
 import org.eclipse.scanning.api.annotation.UiComesAfter;
 import org.eclipse.scanning.api.annotation.UiSection;
 import org.eclipse.scanning.api.annotation.ui.FieldDescriptor;
-import org.eclipse.scanning.api.device.models.IDetectorModel;
+import org.eclipse.scanning.api.device.models.AbstractDetectorModel;
 
-public class MandelbrotModel implements IDetectorModel {
+public class MandelbrotModel extends AbstractDetectorModel {
 
 	// Parameters controlling iteration and termination of the Julia/Mandelbrot algorithm
 	@FieldDescriptor(label="Maximum Iterations", 
-	         min=1, 
+	         minimum=1, 
 	         hint="Iterations to use.")
 	private int    maxIterations;
 	
 	@FieldDescriptor(label="Escape Radius", 
-	         min=0, 
+	         minimum=0, 
 	         hint="The radius of escape for the mandelbrot algorithm.")
 	private double escapeRadius;
 
 	// Parameters controlling the dimensions and size of the 1D and 2D Julia set datasets
 	@FieldDescriptor(label="Columns", 
-	         max=100000, 
-	         min=1, 
+	         maximum=100000, 
+	         minimum=1, 
 	         hint="The number of points that the grid should run over, the x direction.")
 	private int    columns; // for the 2D dataset, from -maxRealCoordinate to +maxRealCoordinate
 	
 	@FieldDescriptor(label="Rows", 
-	         max=100000, 
-	         min=1, 
+	         maximum=100000, 
+	         minimum=1, 
 	         hint="The number of points that the grid should run over, the y direction.")
 	private int    rows;    // for the 2D dataset, from -maxImaginaryCoordinate to +maxImaginaryCoordinate
 	
 	@FieldDescriptor(label="Points", 
 	         validif="points<=(maxRealCoordinate*maxIterations)", 
-	         min=1, 
+	         minimum=1, 
 	         hint="Points of Mandelbrot.")
 	private int    points;  // for the 1D dataset, from 0 to maxRealCoordinate
 	
@@ -50,19 +50,12 @@ public class MandelbrotModel implements IDetectorModel {
 	@FieldDescriptor(label="Imaginary Axis Name")
 	private String imaginaryAxisName;
 
-	/**
-	 * The name of the detector device
-	 */
-	@FieldDescriptor(label="Name")
-	private String name;
-
-	/**
-	 * The exposure time. If calculation is shorter than this, time is artificially added to make the detector respect
-	 * the time that is set.
-	 */
-	@FieldDescriptor(label="Exposure Time")
-	private double exposureTime; // Seconds
-
+	@FieldDescriptor(label="Enable Noise dependent on exposure")
+	private boolean enableNoise = false;
+	
+	@FieldDescriptor(label="The exposure above which there is no noise")
+	private double noiseFreeExposureTime = 5.0;
+	
 	public MandelbrotModel() {
 		maxIterations = 500;
 		escapeRadius = 10.0;
@@ -71,10 +64,18 @@ public class MandelbrotModel implements IDetectorModel {
 		points = 1000;
 		maxRealCoordinate = 1.5;
 		maxImaginaryCoordinate = 1.2;
-		name = "mandelbrot_detector";
-		realAxisName = "x";
-		imaginaryAxisName = "y";
+		setName("mandelbrot");
+		setExposureTime(0.1d);
+		realAxisName = "stage_x";
+		imaginaryAxisName = "stage_y";
 	}
+	
+	public MandelbrotModel(String r, String i) {
+	    this();
+	    this.realAxisName = r;
+	    this.imaginaryAxisName = i;
+	}
+
 
 	@UiSection("Algorithm parameters")
 	public int getMaxIterations() {
@@ -90,8 +91,27 @@ public class MandelbrotModel implements IDetectorModel {
 	public void setEscapeRadius(double escapeRadius) {
 		this.escapeRadius = escapeRadius;
 	}
-	@UiSection("Julia set size")
+	
 	@UiComesAfter("escapeRadius")
+	public boolean isEnableNoise() {
+		return enableNoise;
+	}
+
+	public void setEnableNoise(boolean enableNoise) {
+		this.enableNoise = enableNoise;
+	}
+	
+	@UiComesAfter("enableNoise")
+	public double getNoiseFreeExposureTime() {
+		return noiseFreeExposureTime;
+	}
+
+	public void setNoiseFreeExposureTime(double noiseFreeExposureTime) {
+		this.noiseFreeExposureTime = noiseFreeExposureTime;
+	}
+	
+	@UiSection("Julia set size")
+	@UiComesAfter("noiseFreeExposureTime")
 	public int getColumns() {
 		return columns;
 	}
@@ -129,68 +149,61 @@ public class MandelbrotModel implements IDetectorModel {
 	@Override
 	public int hashCode() {
 		final int prime = 31;
-		int result = 1;
+		int result = super.hashCode();
 		result = prime * result + columns;
+		result = prime * result + (enableNoise ? 1231 : 1237);
 		long temp;
 		temp = Double.doubleToLongBits(escapeRadius);
 		result = prime * result + (int) (temp ^ (temp >>> 32));
-		temp = Double.doubleToLongBits(exposureTime);
+		result = prime * result + ((imaginaryAxisName == null) ? 0 : imaginaryAxisName.hashCode());
+		temp = Double.doubleToLongBits(maxImaginaryCoordinate);
 		result = prime * result + (int) (temp ^ (temp >>> 32));
 		result = prime * result + maxIterations;
 		temp = Double.doubleToLongBits(maxRealCoordinate);
 		result = prime * result + (int) (temp ^ (temp >>> 32));
-		temp = Double.doubleToLongBits(maxImaginaryCoordinate);
+		temp = Double.doubleToLongBits(noiseFreeExposureTime);
 		result = prime * result + (int) (temp ^ (temp >>> 32));
-		result = prime * result + ((name == null) ? 0 : name.hashCode());
 		result = prime * result + points;
-		result = prime * result + rows;
 		result = prime * result + ((realAxisName == null) ? 0 : realAxisName.hashCode());
-		result = prime * result + ((imaginaryAxisName == null) ? 0 : imaginaryAxisName.hashCode());
+		result = prime * result + rows;
 		return result;
 	}
 	@Override
 	public boolean equals(Object obj) {
 		if (this == obj)
 			return true;
-		if (obj == null)
+		if (!super.equals(obj))
 			return false;
 		if (getClass() != obj.getClass())
 			return false;
 		MandelbrotModel other = (MandelbrotModel) obj;
 		if (columns != other.columns)
 			return false;
-		if (Double.doubleToLongBits(escapeRadius) != Double
-				.doubleToLongBits(other.escapeRadius))
+		if (enableNoise != other.enableNoise)
 			return false;
-		if (Double.doubleToLongBits(exposureTime) != Double
-				.doubleToLongBits(other.exposureTime))
+		if (Double.doubleToLongBits(escapeRadius) != Double.doubleToLongBits(other.escapeRadius))
+			return false;
+		if (imaginaryAxisName == null) {
+			if (other.imaginaryAxisName != null)
+				return false;
+		} else if (!imaginaryAxisName.equals(other.imaginaryAxisName))
+			return false;
+		if (Double.doubleToLongBits(maxImaginaryCoordinate) != Double.doubleToLongBits(other.maxImaginaryCoordinate))
 			return false;
 		if (maxIterations != other.maxIterations)
 			return false;
-		if (Double.doubleToLongBits(maxRealCoordinate) != Double
-				.doubleToLongBits(other.maxRealCoordinate))
+		if (Double.doubleToLongBits(maxRealCoordinate) != Double.doubleToLongBits(other.maxRealCoordinate))
 			return false;
-		if (Double.doubleToLongBits(maxImaginaryCoordinate) != Double
-				.doubleToLongBits(other.maxImaginaryCoordinate))
-			return false;
-		if (name == null) {
-			if (other.name != null)
-				return false;
-		} else if (!name.equals(other.name))
+		if (Double.doubleToLongBits(noiseFreeExposureTime) != Double.doubleToLongBits(other.noiseFreeExposureTime))
 			return false;
 		if (points != other.points)
-			return false;
-		if (rows != other.rows)
 			return false;
 		if (realAxisName == null) {
 			if (other.realAxisName != null)
 				return false;
 		} else if (!realAxisName.equals(other.realAxisName))
 			return false;
-		if (imaginaryAxisName == null) {
-			if (other.imaginaryAxisName != null)
-				return false;
-		} else if (!imaginaryAxisName.equals(other.imaginaryAxisName))
+		if (rows != other.rows)
 			return false;
 		return true;
 	}
@@ -198,10 +211,7 @@ public class MandelbrotModel implements IDetectorModel {
 	@UiSection("Device details")
 	@UiComesAfter("maxImaginaryCoordinate")
 	public String getName() {
-		return name;
-	}
-	public void setName(String name) {
-		this.name = name;
+		return super.getName();
 	}
 	@UiComesAfter("name")
 	public String getRealAxisName() {
@@ -220,11 +230,6 @@ public class MandelbrotModel implements IDetectorModel {
 
 	@UiComesAfter("imaginaryAxisName")
 	public double getExposureTime() {
-		return exposureTime;
+		return super.getExposureTime();
 	}
-
-	public void setExposureTime(double exposure) {
-		this.exposureTime = exposure;
-	}
-
 }

@@ -43,32 +43,37 @@ public class ScanRankTest {
 	public void testRankLine2D() throws Exception {
 		lineTest(1);
 	}
-	
+
 	@Test
 	public void testRankLine3D() throws Exception {
 		lineTest(2);
 	}
-	
+
 	@Test
 	public void testRankLine4D() throws Exception {
 		lineTest(3);
 	}
+
 	@Test
 	public void testRankLine5D() throws Exception {
 		lineTest(4);
 	}
+
 	@Test
 	public void testRankLine6D() throws Exception {
 		lineTest(5);
 	}
+
 	@Test
 	public void testRankLine7D() throws Exception {
 		lineTest(6);
 	}
+
 	@Test
 	public void testRankLine8D() throws Exception {
 		lineTest(7);
 	}
+
 	@Test
 	public void testRankLine9D() throws Exception {
 		lineTest(8);
@@ -80,14 +85,18 @@ public class ScanRankTest {
 
         OneDEqualSpacingModel model = new OneDEqualSpacingModel();
         model.setPoints(10);
+        model.setxName("x");
+        model.setyName("y");
 		
 		// Get the point list
 		IPointGenerator<?> gen = service.createGenerator(model, roi);
-		
+
+		IPointGenerator<?>[] gens = new IPointGenerator<?>[nestCount + 1];
 		for (int i = 0; i < nestCount; i++) {
-			IPointGenerator<StepModel>             temp = service.createGenerator(new StepModel("T"+i, 290, 300, 1)); 
-			gen = service.createCompoundGenerator(temp, gen);
+			gens[i] = service.createGenerator(new StepModel("T"+(nestCount - 1 - i), 290, 300, 1)); 
 		}
+		gens[nestCount] = gen;
+		gen = service.createCompoundGenerator(gens);
 		
         checkOneGenerator(nestCount, gen);
 	}
@@ -96,39 +105,44 @@ public class ScanRankTest {
 	public void testRankSpiral1D() throws Exception {
 		spiralTest(0);
 	}
-
+	
 	@Test
 	public void testRankSpiral2D() throws Exception {
 		spiralTest(1);
 	}
-	
+
 	@Test
 	public void testRankSpiral3D() throws Exception {
 		spiralTest(2);
 	}
-	
+
 	@Test
 	public void testRankSpiral4D() throws Exception {
 		spiralTest(3);
 	}
+	
 	@Test
 	public void testRankSpiral5D() throws Exception {
 		spiralTest(4);
 	}
+	
 	@Test
 	public void testRankSpiral6D() throws Exception {
 		spiralTest(5);
 	}
+	
 	@Test
 	public void testRankSpiral7D() throws Exception {
 		spiralTest(6);
 	}
+	
 	@Test
 	public void testRankSpiral8D() throws Exception {
 		spiralTest(7);
 	}
-	@Test
-	public void testRankSpiral9D() throws Exception {
+	
+	@Test(expected=org.python.core.PyException.class)
+	public void testScanLengthOver32BitRaisesPyException() throws Exception {
 		spiralTest(8);
 	}
 
@@ -140,16 +154,18 @@ public class ScanRankTest {
 		box.setFastAxisLength(3);
 		box.setSlowAxisLength(3);
 
-		SpiralModel model = new SpiralModel();
+		SpiralModel model = new SpiralModel("x", "y");
 		model.setBoundingBox(box);
 		
 		// Get the point list
 		IPointGenerator<?> gen = service.createGenerator(model);
 		
+		IPointGenerator<?>[] gens = new IPointGenerator<?>[nestCount + 1];
 		for (int i = 0; i < nestCount; i++) {
-			IPointGenerator<StepModel>             temp = service.createGenerator(new StepModel("T"+i, 290, 300, 1)); 
-			gen = service.createCompoundGenerator(temp, gen);
+			gens[i] = service.createGenerator(new StepModel("T"+(nestCount -1 -i), 290, 300, 1));
 		}
+		gens[nestCount] = gen;
+		gen = service.createCompoundGenerator(gens);
         
         checkOneGenerator(nestCount, gen);
 
@@ -215,18 +231,21 @@ public class ScanRankTest {
 		box.setFastAxisLength(3);
 		box.setSlowAxisLength(3);
 
-		GridModel model = new GridModel();
+		GridModel model = new GridModel("x", "y");
 		model.setSlowAxisPoints(20);
 		model.setFastAxisPoints(20);
 		model.setBoundingBox(box);
 		
 		// Get the point list
-		IPointGenerator<?> gen = service.createGenerator(model);
+		IPointGenerator<?> grid = service.createGenerator(model);
 		
+		IPointGenerator<?>[] gens = new IPointGenerator<?>[nestCount + 1];
 		for (int i = 0; i < nestCount; i++) {
-			IPointGenerator<StepModel>             temp = service.createGenerator(new StepModel("T"+i, 290, 300, 1)); 
-			gen = service.createCompoundGenerator(temp, gen);
+			gens[i] = service.createGenerator(new StepModel("T"+(nestCount -1 -i), 290, 300, 1));
 		}
+		gens[nestCount] = grid;
+
+		IPointGenerator<?> gen = service.createCompoundGenerator(gens);
 		
 		System.out.println("The number of points will be: "+gen.size());
 		

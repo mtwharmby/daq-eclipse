@@ -3,7 +3,6 @@ package org.eclipse.scanning.api.points.models;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -50,22 +49,26 @@ import java.util.List;
  * @author Matthew Gerring
  *
  */
-public class CompoundModel {
+public class CompoundModel<R> {
 
-	private List<IScanPathModel>       models;
-	private Collection<ScanRegion<?>>  regions;
+	private List<Object>               models;
+	private Collection<ScanRegion<R>>  regions;
 	
 	public CompoundModel() {
 		// Must have no-arg constructor
 	}
 
-	public CompoundModel(IScanPathModel... ms) {
-		models = Arrays.asList(ms);
+	public CompoundModel(Object... ms) {
+		if (ms!=null && ms.length==1 && ms[0] instanceof List) {
+			models = (List<Object>)ms[0];
+		} else {
+		    models = Arrays.asList(ms);
+		}
 	}
-	public CompoundModel(List<IScanPathModel> ms) {
+	public CompoundModel(List<Object> ms) {
 		models = ms;
 	}
-	public <T> CompoundModel(IScanPathModel model, T region) {
+	public CompoundModel(IScanPathModel model, R region) {
 		if (region instanceof IScanPathModel) { // It's not a region
 			models = Arrays.asList(new IScanPathModel[]{model, (IScanPathModel)region});
 		} else {
@@ -73,7 +76,7 @@ public class CompoundModel {
 		}
 	}
 	
-	public <T> void setData(IScanPathModel model, T region) {
+	public void setData(IScanPathModel model, R region) {
 		if (region instanceof IScanPathModel) { // It's not a region
 			models = Arrays.asList(new IScanPathModel[]{model, (IScanPathModel)region});
 		} else {
@@ -81,12 +84,12 @@ public class CompoundModel {
 		}
 	}
 	
-	public <T> void setData(IScanPathModel model, T region, List<String> names) {
+	public void setData(IScanPathModel model, R region, List<String> names) {
 		if (region instanceof IScanPathModel) throw new IllegalArgumentException("The region must not be a generator model!");
 		
 		// We do it this way to make setData(...) fast. This means addData(...) has to deal with unmodifiable lists.
 		this.models  = Arrays.asList(model);
-	    this.regions = Arrays.asList(new ScanRegion<T>(region, names)); 
+	    this.regions = Arrays.asList(new ScanRegion<R>(region, names)); 
 	}
 
 	/**
@@ -96,29 +99,29 @@ public class CompoundModel {
 	 * @param model
 	 * @param rois
 	 */
-	public void addData(IScanPathModel model, Collection<?> rois) {
+	public void addData(Object model, Collection<R> rois) {
 		
-		if (models==null) models = new ArrayList<IScanPathModel>(7);
+		if (models==null) models = new ArrayList<Object>(7);
 		try {
 			models.add(model);
 		} catch(Exception ne) {
 			// Models is allowed to be non-null and unmodifiable	
 			// If it is, we make it modifiable and add the model.
-			List<IScanPathModel> tmp = new ArrayList<IScanPathModel>(7);
+			List<Object> tmp = new ArrayList<Object>(7);
 			tmp.addAll(models);
 			tmp.add(model);
 			models = tmp;
 		}
 		
 		// They are not really ordered but for now we maintain order.
-		if (regions==null) regions = new LinkedHashSet<ScanRegion<?>>(7);
-		for (Object roi : rois) {
-			ScanRegion<?> region = new ScanRegion<>(roi, model.getScannableNames());
+		if (regions==null) regions = new LinkedHashSet<ScanRegion<R>>(7);
+		if (rois!=null) for (R roi : rois) {
+			ScanRegion<R> region = new ScanRegion<>(roi, AbstractPointsModel.getScannableNames(model));
 			try {
 				this.regions.add(region);
 			} catch(Exception ne) {
 				// It might be unmodifiable
-				Collection<ScanRegion<?>> tmp = new LinkedHashSet<ScanRegion<?>>(7);
+				Collection<ScanRegion<R>> tmp = new LinkedHashSet<ScanRegion<R>>(7);
 				tmp.addAll(this.regions);
 				tmp.add(region);
 				regions = tmp;
@@ -126,22 +129,22 @@ public class CompoundModel {
 		}
 	}
 	
-	public List<IScanPathModel> getModels() {
+	public List<Object> getModels() {
 		return models;
 	}
-	public void setModels(List<IScanPathModel> models) {
+	public void setModels(List<Object> models) {
 		this.models = models;
 	}
-	public void setModelsVarArgs(IScanPathModel... models) {
+	public void setModelsVarArgs(Object... models) {
 		this.models = Arrays.asList(models);
 	}
-	public Collection<ScanRegion<?>> getRegions() {
-		return regions;
+	public Collection<ScanRegion<R>> getRegions() {
+		return (Collection<ScanRegion<R>>)regions;
 	}
-	public void setRegions(Collection<ScanRegion<?>> regions) {
+	public void setRegions(Collection<ScanRegion<R>> regions) {
 		this.regions = regions;
 	}
-	public void setRegionsVarArgs(ScanRegion<?>... regions) {
+	public void setRegionsVarArgs(ScanRegion<R>... regions) {
 		this.regions = Arrays.asList(regions);
 	}
 	@Override

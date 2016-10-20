@@ -13,16 +13,22 @@ import org.eclipse.scanning.api.points.IPosition;
  * other scannables are. This is important so that during a scan, each scannable when it is
  * told to move, has available all the other moves at that IPosition in the scan.
  * 
+ * Important note - please do not extend this interface, it must be kept simple. In GDA9 extra
+ * methods such as scanStart() etc. are dealt with by annotations. The idea is to have core
+ * functionality as interface declarations and optional extensions as annotated methods.
+ * See @ScanStart @ScanEnd @ScanFinally @ScanFault @ScanAbort etc.
+ * 
  * @author Matthew Gerring
+ * @param <T> the type of value returned by {@link #getPosition()}
  *
  */
-public interface IScannable<T> extends ILevel, INameable, ITimeoutable {
+public interface IScannable<T> extends ILevel, INameable, ITimeoutable, IBoundable<T> {
 	
 	/**
 	 * Returns the current position of the Scannable. Called by ConcurentScan at the end of the point. 
 	 * 
 	 * @return Current position with an element for each input and extra field. null if their are no fields.
-	 * @throws DeviceException
+	 * @throws Exception
 	 */
 	public T getPosition() throws Exception;
 	
@@ -32,7 +38,7 @@ public interface IScannable<T> extends ILevel, INameable, ITimeoutable {
 	 * 
 	 * Same as calling setPosition(value, null);
 	 * 
-	 * @param position
+	 * @param value
 	 * @throws Exception
 	 */
 	default void setPosition(T value) throws Exception {

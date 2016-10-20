@@ -8,12 +8,14 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.eclipse.dawnsci.analysis.api.roi.IROI;
+import org.eclipse.scanning.api.device.IScannableDeviceService;
 import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.event.core.ISubmitter;
@@ -22,7 +24,6 @@ import org.eclipse.scanning.api.event.scan.IScanListener;
 import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.event.scan.ScanEvent;
 import org.eclipse.scanning.api.event.scan.ScanRequest;
-import org.eclipse.scanning.api.malcolm.IMalcolmConnection;
 import org.eclipse.scanning.api.malcolm.IMalcolmService;
 import org.eclipse.scanning.api.malcolm.models.MalcolmConnectionInfo;
 import org.eclipse.scanning.api.malcolm.models.MapMalcolmDetectorModel;
@@ -32,12 +33,12 @@ import org.eclipse.scanning.api.points.models.GridModel;
 import org.eclipse.scanning.api.points.models.IScanPathModel;
 import org.eclipse.scanning.api.points.models.StepModel;
 import org.eclipse.scanning.example.detector.MandelbrotModel;
+import org.eclipse.scanning.example.scannable.MockScannableConnector;
 import org.eclipse.scanning.sequencer.RunnableDeviceServiceImpl;
 import org.eclipse.scanning.server.servlet.ScanServlet;
 import org.eclipse.scanning.server.servlet.Services;
 import org.eclipse.scanning.test.malcolm.device.MockedMalcolmService;
 import org.eclipse.scanning.test.scan.mock.MockDetectorModel;
-import org.eclipse.scanning.test.scan.mock.MockScannableConnector;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -161,7 +162,7 @@ public class ScanServletPluginTest {
 		
 		final ScanRequest<?> req = new ScanRequest<IROI>();
 		req.setCompoundModel(new CompoundModel(new StepModel("fred", 0, 9, 1)));
-		req.setMonitorNames("monitor");
+		req.setMonitorNames(Arrays.asList("monitor"));
 
 		final MockDetectorModel dmodel = new MockDetectorModel();
 		dmodel.setName("detector");
@@ -200,7 +201,7 @@ public class ScanServletPluginTest {
 		}
 		models.add(gmodel);
 		req.setCompoundModel(new CompoundModel(models.toArray(new IScanPathModel[models.size()])));
-		req.setMonitorNames("monitor");
+		req.setMonitorNames(Arrays.asList("monitor"));
 		
 		final File tmp = File.createTempFile("scan_servlet_test", ".nxs");
 		tmp.deleteOnExit();
@@ -246,7 +247,7 @@ public class ScanServletPluginTest {
 		gmodel.setSlowAxisName("yNex");
 
 		req.setCompoundModel(new CompoundModel(gmodel));
-		req.setMonitorNames("monitor");
+		req.setMonitorNames(Arrays.asList("monitor"));
 		
 		final File tmp = File.createTempFile("scan_servlet_test", ".nxs");
 		tmp.deleteOnExit();
@@ -271,7 +272,7 @@ public class ScanServletPluginTest {
 		
 		final ScanRequest<?> req = new ScanRequest<IROI>();
 		req.setCompoundModel(new CompoundModel(new StepModel("temperature", 0, 9, 1)));
-		req.setMonitorNames("monitor");
+		req.setMonitorNames(Arrays.asList("monitor"));
 		
 		final File tmp = File.createTempFile("scan_servlet_test_malc", ".nxs");
 		tmp.deleteOnExit();
@@ -376,21 +377,19 @@ public class ScanServletPluginTest {
 	}
 	
 	private static void doHardCodedTestThings() throws Exception {
+		
+		
 		// We will run this test without real GDA devices. Therefore we
 		// override the connector
 		// DO NOT COPY TESTING ONLY
-		RunnableDeviceServiceImpl.setDeviceConnectorService(new MockScannableConnector()); 
-		
+		IScannableDeviceService dservice = new MockScannableConnector(null);
+		RunnableDeviceServiceImpl.setDeviceConnectorService(dservice); 
+		Services.setConnector(dservice);
 		
 		// Put a connection in the DeviceServiceImpl which is used for the test
-		IMalcolmService malcolmService = new MockedMalcolmService();
-		
-		// Should create a standard MockedMalcolmDevice and not one of the more complex types.
-		IMalcolmConnection connection   = malcolmService.createConnection(URI.create("tcp://standard"));
-		((RunnableDeviceServiceImpl)Services.getRunnableDeviceService())._registerConnection(URI.create("tcp://standard"), connection);
+		IMalcolmService malcolmService = new MockedMalcolmService(false);
 		
 		// DO NOT COPY TESTING ONLY
-		Services.setConnector(new MockScannableConnector());
 		
 		// We double check that the services injected into the servlet bundle are there.
 		assertNotNull(Services.getConnector());

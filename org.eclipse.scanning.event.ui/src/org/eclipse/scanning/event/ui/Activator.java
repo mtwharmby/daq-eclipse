@@ -10,7 +10,7 @@ package org.eclipse.scanning.event.ui;
 
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.resource.ImageDescriptor;
-import org.eclipse.scanning.event.ui.preference.CommandConstants;
+import org.eclipse.scanning.api.ui.CommandConstants;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.osgi.framework.BundleContext;
 
@@ -69,10 +69,7 @@ public class Activator extends AbstractUIPlugin {
     	
     	String uri = null;
 		if (uri == null) uri = getNovelCommandPreference(CommandConstants.JMS_URI);
-	    if (uri == null) uri = System.getProperty("org.eclipse.scanning.broker.uri");
-	    if (uri == null) uri = System.getProperty("gda.activemq.broker.uri"); // GDA specific but not a compilation dependency.
-		if (uri == null) uri = CommandConstants.DEFAULT_JMS_URI;
-		
+	    if (uri == null) uri = CommandConstants.getScanningBrokerUri();
 		return uri;
 	}
 

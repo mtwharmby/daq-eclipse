@@ -16,6 +16,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Locale;
 
+import org.eclipse.scanning.api.IModelProvider;
 import org.eclipse.scanning.api.points.models.IScanPathModel;
 
 /**
@@ -63,8 +64,29 @@ public class FieldValue {
     		String label = anot.label();
     		if (label!=null && !"".equals(label)) return label;
     	}
-    	return name;
+    	return decamel(name);
 	}
+	
+	/**
+	 * Method to decamel case field names.
+	 * @param fieldName
+	 * @return
+	 */
+	public static String decamel(String fieldName) {
+		try {
+		    String[] words = fieldName.split("(?<!(^|[A-Z]))(?=[A-Z])|(?<!^)(?=[A-Z][a-z])");
+		    StringBuilder buf = new StringBuilder();
+		    for (String string : words) {
+		    	buf.append(String.valueOf(string.charAt(0)).toUpperCase());
+		    	buf.append(string.substring(1));
+		    	buf.append(" ");
+			}
+		    return buf.toString();
+		} catch (Exception ne) {
+			return fieldName;
+		}
+	}
+
 
 
 	@Override
@@ -147,6 +169,16 @@ public class FieldValue {
 		}
 	}
 	
+
+	public Object get(boolean create) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, InstantiationException {
+		Object value = get();
+		if (value !=null ||!create) return value;
+		Method method = getMethod(model.getClass(), name);
+		if (method!=null) {
+			return method.getReturnType().newInstance();
+		}
+		return null;
+	}
 	
 	/**
 	 * Tries to find the no-argument getter for this field, ignoring case
@@ -189,6 +221,33 @@ public class FieldValue {
 		}
 		return null;
 	}
+	
+	private static Method getMethod(Class<?> clazz, String name) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+		
+		if (clazz==null || clazz.equals(Object.class)) return null;
+		
+		final String getter = getGetterName(name).toLowerCase();
+		Method[] methods = clazz.getMethods();
+		for (Method method : methods) {
+			if (method.getName().toLowerCase().equals(getter)) {
+				if (method.getParameterTypes().length<1) {
+					return method;
+				}
+			}
+		}
+		
+		final String isser  = getIsserName(name).toLowerCase();
+		for (Method method : methods) {
+			if (method.getName().toLowerCase().equals(isser)) {
+				if (method.getParameterTypes().length<1) {
+					return method;
+				}
+			}
+		}
+		return null;
+	}
+	
+
 	
 	public boolean isModelField(String name) throws NoSuchFieldException, SecurityException {
         return isModelField(model, name);
@@ -277,6 +336,11 @@ public class FieldValue {
 	}
 	public static String getFieldWithUpperCaseFirstLetter(final String fieldName) {
 		return fieldName.substring(0, 1).toUpperCase(Locale.US) + fieldName.substring(1);
+	}
+
+	@Override
+	public String toString() {
+		return "FieldValue [name=" + name + "]";
 	}
 
 }

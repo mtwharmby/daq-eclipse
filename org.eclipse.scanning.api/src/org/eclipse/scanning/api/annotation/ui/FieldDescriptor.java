@@ -27,6 +27,8 @@ import java.lang.annotation.Target;
  * the models and the scan command processing. It produces a general scan user interface which
  * is interoperable with queues and the jython command line.
  * 
+ * TODO Perhaps break this up into separate annotations, however that would be slower to read.
+ * 
  */
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
@@ -43,6 +45,26 @@ public @interface FieldDescriptor {
 	 * @return true if the field is editable or false for read only.
 	 */
 	public boolean editable() default true;
+	
+	/**
+	 * If this field represents a particular sort of device, they
+	 * should only be able to choose that device.
+	 * 
+	 * @return
+	 */
+	public DeviceType device() default DeviceType.NONE;
+	
+	/**
+	 * 
+	 * @return
+	 */
+	public FieldRole role() default FieldRole.ALL;
+	
+	/**
+	 * Used to specify how the edit of the value should happen.
+	 * @return
+	 */
+	public EditType edit() default EditType.DIRECT;
 	
 	/**
 	 * 
@@ -65,19 +87,29 @@ public @interface FieldDescriptor {
 	public String label() default "";
 	
 	/**
-	 * 
+	 * The value for the value if this field is compound. If set this
+	 * is used as a pattern using ${} notation. For instance this field
+	 * is an object with two fields x and y. The compoundLabel might be
+	 * "x=${x}, y=${y}". This expression will be evaluated with the values 
+	 * of x and y at render time.
+	 * @return
+	 */
+	public String compoundLabel() default "";
+	
+	/**
+	 * If scannable is set, this value overrides the maximum of the scannble, otherwise the scannable is used.
 	 * @return maximum allowed legal value for field
 	 */
-	public double max() default Double.POSITIVE_INFINITY;
+	public double maximum() default Double.POSITIVE_INFINITY;
 	
 	/**
-	 * 
+	 * If scannable is set, this value overrides the minimum of the scannble, otherwise the scannable is used.
 	 * @return minimum allowed legal value for field
 	 */
-	public double min() default Double.NEGATIVE_INFINITY;
+	public double minimum() default Double.NEGATIVE_INFINITY;
 	
 	/**
-	 * 
+	 * If scannable is set, this value overrides the unit of the scannble, otherwise the scannable unit is used.
 	 * @return the unit that the fields value should be in.
 	 */
 	public String unit() default "";

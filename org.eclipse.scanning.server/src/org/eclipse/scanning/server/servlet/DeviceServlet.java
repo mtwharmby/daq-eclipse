@@ -1,8 +1,19 @@
 package org.eclipse.scanning.server.servlet;
 
+import static org.eclipse.scanning.api.event.EventConstants.DEVICE_REQUEST_TOPIC;
+import static org.eclipse.scanning.api.event.EventConstants.DEVICE_RESPONSE_TOPIC;
+
+import java.net.URI;
+import java.net.URISyntaxException;
+
+import javax.annotation.PostConstruct;
+
 import org.eclipse.scanning.api.device.DeviceResponse;
+import org.eclipse.scanning.api.event.EventConstants;
 import org.eclipse.scanning.api.event.EventException;
+import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.event.core.IPublisher;
+import org.eclipse.scanning.api.event.core.IResponseCreator;
 import org.eclipse.scanning.api.event.core.IResponseProcess;
 import org.eclipse.scanning.api.event.scan.DeviceRequest;
 
@@ -27,10 +38,31 @@ import org.eclipse.scanning.api.event.scan.DeviceRequest;
  *
  */
 public class DeviceServlet extends AbstractResponderServlet<DeviceRequest> {
+	
+	public DeviceServlet() {
+		super(DEVICE_REQUEST_TOPIC, DEVICE_RESPONSE_TOPIC);
+	}
+	
+	@PostConstruct  // Requires spring 3 or better
+    public void connect() throws EventException, URISyntaxException {	
+		responder = eventService.createResponder(new URI(broker), requestTopic, responseTopic);
+		responder.setBeanClass(DeviceRequest.class);
+		responder.setResponseCreator(createResponseCreator());
+     	logger.info("Started "+getClass().getSimpleName()+" using bean "+responder.getBeanClass());
+	}
+
+	protected IResponseCreator<DeviceRequest> createResponseCreator() {
+		return new DoResponseCreator() {
+			@Override
+			public boolean isSynchronous() {
+				return false;
+			}
+		};
+	}
 
 	@Override
 	public IResponseProcess<DeviceRequest> createResponder(DeviceRequest bean, IPublisher<DeviceRequest> response) throws EventException {
-		return new DeviceResponse(Services.getRunnableDeviceService(), bean, response);
+		return new DeviceResponse(Services.getRunnableDeviceService(), Services.getConnector(), bean, response);
 	}
 
 }

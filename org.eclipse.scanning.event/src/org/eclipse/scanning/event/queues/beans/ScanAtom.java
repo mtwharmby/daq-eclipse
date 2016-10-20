@@ -6,7 +6,7 @@ import java.util.Map;
 
 import org.eclipse.scanning.api.device.models.IDetectorModel;
 import org.eclipse.scanning.api.event.queues.IQueueService;
-import org.eclipse.scanning.api.event.queues.beans.IAtomWithChildQueue;
+import org.eclipse.scanning.api.event.queues.beans.IHasChildQueue;
 import org.eclipse.scanning.api.event.queues.beans.QueueAtom;
 import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.points.models.IScanPathModel;
@@ -20,7 +20,12 @@ import org.eclipse.scanning.api.points.models.IScanPathModel;
  * @author Michael Wharmby
  *
  */
-public class ScanAtom extends QueueAtom implements IAtomWithChildQueue {
+public class ScanAtom extends QueueAtom implements IHasChildQueue {
+	
+	/**
+	 * Version ID for serialization. Should be updated when class changed. 
+	 */
+	private static final long serialVersionUID = 20161017L;
 	
 	private List<IScanPathModel> pathModels;
 	private Collection<String> monitors;

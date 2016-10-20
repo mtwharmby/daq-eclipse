@@ -3,7 +3,6 @@ package org.eclipse.scanning.test.scan;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -14,12 +13,14 @@ import java.util.List;
 import org.eclipse.scanning.api.ILevel;
 import org.eclipse.scanning.api.INameable;
 import org.eclipse.scanning.api.IScannable;
+import org.eclipse.scanning.api.ModelValidationException;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
-import org.eclipse.scanning.api.device.IDeviceConnectorService;
 import org.eclipse.scanning.api.device.IRunnableDevice;
 import org.eclipse.scanning.api.device.IRunnableDeviceService;
+import org.eclipse.scanning.api.device.IScannableDeviceService;
 import org.eclipse.scanning.api.device.IWritableDetector;
 import org.eclipse.scanning.api.event.IEventService;
+import org.eclipse.scanning.api.event.core.IDisconnectable;
 import org.eclipse.scanning.api.event.core.IPublisher;
 import org.eclipse.scanning.api.event.core.ISubscriber;
 import org.eclipse.scanning.api.event.scan.DeviceState;
@@ -32,7 +33,7 @@ import org.eclipse.scanning.api.points.IPointGeneratorService;
 import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.points.MapPosition;
 import org.eclipse.scanning.api.points.Point;
-import org.eclipse.scanning.api.points.PointsValidationException;
+import org.eclipse.scanning.api.points.models.AbstractBoundingBoxModel;
 import org.eclipse.scanning.api.points.models.AbstractPointsModel;
 import org.eclipse.scanning.api.points.models.BoundingBox;
 import org.eclipse.scanning.api.points.models.GridModel;
@@ -42,15 +43,15 @@ import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.api.scan.event.IPositionListener;
 import org.eclipse.scanning.api.scan.event.IPositioner;
 import org.eclipse.scanning.api.scan.models.ScanModel;
+import org.eclipse.scanning.example.scannable.MockScannable;
 import org.eclipse.scanning.test.BrokerTest;
 import org.eclipse.scanning.test.scan.mock.MockDetectorModel;
-import org.eclipse.scanning.test.scan.mock.MockScannable;
 import org.junit.Test;
 
 public class AbstractScanTest extends BrokerTest {
 
 	protected IRunnableDeviceService      dservice;
-	protected IDeviceConnectorService     connector;
+	protected IScannableDeviceService     connector;
 	protected IPointGeneratorService      gservice;
 	protected IEventService               eservice;
 
@@ -59,9 +60,14 @@ public class AbstractScanTest extends BrokerTest {
 
 		IPositioner     pos    = dservice.createPositioner();
 		pos.setPosition(new MapPosition("x:0:1, y:0:2"));
+
+		IScannable<Number> x = connector.getScannable("x");
+		IScannable<Number> y = connector.getScannable("y");
+		Number xpos = x.getPosition();
+		Number ypos = y.getPosition();
 		
-		assertTrue(connector.getScannable("x").getPosition().equals(1d));
-		assertTrue(connector.getScannable("y").getPosition().equals(2d));
+		assertTrue(Math.round(xpos.doubleValue()) == 1d);
+		assertTrue(Math.round(ypos.doubleValue()) == 2d);
 	}
 	
 	@Test
@@ -178,12 +184,17 @@ public class AbstractScanTest extends BrokerTest {
 	@Test
 	public void testThreadCount() throws Exception {
 			
-		int before = Thread.activeCount();
 		IRunnableDevice<ScanModel> scanner = createTestScanner(null, null, null, null, null);
+		int before = Thread.activeCount();
 		scanner.run(null);
-		Thread.sleep(200);
+		if (connector instanceof IDisconnectable) ((IDisconnectable)connector).disconnect();
+		Thread.sleep(25); // Just allows any threads no longer required to exit.
 		int after = Thread.activeCount();
-		if (after>before+1) throw new Exception("too many extra threads after scan! Expected not more than "+before+1+" got "+after);
+		System.out.println("Before = "+before);
+		System.out.println("After  = "+after);
+		int tolerance = 3;
+		System.out.println("Tolerance  = "+tolerance);
+		if (after>before+tolerance) throw new Exception("too many extra threads after scan! Expected not more than "+(before+tolerance)+" got "+after);
 	}
 
 	
@@ -220,8 +231,8 @@ public class AbstractScanTest extends BrokerTest {
 			
 		} catch (Exception ex) {
 			assertEquals(ScanningException.class, ex.getClass());
-			assertEquals(PointsValidationException.class, ex.getCause().getClass());
-			assertEquals("Model step is directed backwards!", ex.getCause().getMessage());
+			assertEquals(ModelValidationException.class, ex.getCause().getClass());
+			assertTrue(ex.getCause().getMessage().toLowerCase().indexOf("wrong direction")>0);
 			return;
 		}
 		
@@ -247,7 +258,7 @@ public class AbstractScanTest extends BrokerTest {
 			
 		} catch (Exception ex) {
 			assertEquals(ScanningException.class, ex.getClass());
-			assertEquals(PointsValidationException.class, ex.getCause().getClass());
+			assertEquals(ModelValidationException.class, ex.getCause().getClass());
 			assertEquals("Model step size must be nonzero!", ex.getCause().getMessage());
 			return;
 		}
@@ -273,6 +284,7 @@ public class AbstractScanTest extends BrokerTest {
 		    scanner.run(null);
 		} catch (ScanningException expected) {
 			if (!expected.getMessage().equals("The detector had a problem writing! This exception should stop the scan running!")) {
+				if (expected.getCause()!=null) expected.getCause().printStackTrace();
 				throw new Exception("Expected the precise message from the mock detector not to be lost but it was! It was '"+expected.getMessage()+"'");
 			}
 			ok=true;
@@ -365,19 +377,19 @@ public class AbstractScanTest extends BrokerTest {
 	@Test
 	public void testSimpleScanSetPositionCalls() throws Exception {
 			
-		IScannable<Number> x = connector.getScannable("x");
-		IRunnableDevice<ScanModel> scanner = createTestScanner(null, null, null, null, null);
+		IScannable<Number> p = connector.getScannable("p");
+		IRunnableDevice<ScanModel> scanner = createTestScanner(null, null, null, null, null, new String[]{"p","q"});
 		
 		scanner.run(null);
 		
 		checkRun(scanner);
 		
 		// NOTE Did with Mockito but caused dependency issues.
-		MockScannable ms = (MockScannable)x;
-		ms.verify(0.3, new Point(0,0.3,0,0.3));
-		ms.verify(0.3, new Point(0,0.3,2,1.5));
-		ms.verify(1.5, new Point(2,1.5,0,0.3));
-		ms.verify(1.5, new Point(2,1.5,2,1.5));
+		MockScannable ms = (MockScannable)p;
+		ms.verify(0.3, new Point("p",0,0.3, "q",0,0.3));
+		ms.verify(0.3, new Point("p",0,0.3, "q",2,1.5));
+		ms.verify(1.5, new Point("p",2,1.5, "q",0,0.3));
+		ms.verify(1.5, new Point("p",2,1.5, "q",2,1.5));
 	}
 	
 	@Test
@@ -409,10 +421,19 @@ public class AbstractScanTest extends BrokerTest {
 	}
 
 	private IRunnableDevice<ScanModel> createTestScanner(AbstractPointsModel pmodel,
+			final ScanBean bean,
+			final IPublisher<ScanBean> publisher,
+			IScannable<?> monitor,
+			IRunnableDevice<MockDetectorModel> detector) throws Exception {
+		return createTestScanner(pmodel, bean, publisher, monitor, detector, null);
+	}
+
+	private IRunnableDevice<ScanModel> createTestScanner(AbstractPointsModel pmodel,
 														final ScanBean bean,
 														final IPublisher<ScanBean> publisher,
 														IScannable<?> monitor,
-														IRunnableDevice<MockDetectorModel> detector) throws Exception {
+														IRunnableDevice<MockDetectorModel> detector,
+														String[] axes) throws Exception {
 		
 		// Configure a detector with a collection time.
 		if (detector == null) {
@@ -424,10 +445,17 @@ public class AbstractScanTest extends BrokerTest {
 		
 		// If none passed, create scan points for a grid.
 		if (pmodel == null) {
-			pmodel = new GridModel();
+			pmodel = new GridModel("x", "y");
 			((GridModel) pmodel).setSlowAxisPoints(5);
 			((GridModel) pmodel).setFastAxisPoints(5);
 			((GridModel) pmodel).setBoundingBox(new BoundingBox(0,0,3,3));
+			
+		}
+		
+		if (axes!=null && pmodel instanceof AbstractBoundingBoxModel) {
+			AbstractBoundingBoxModel bmodel = (AbstractBoundingBoxModel)pmodel;
+			bmodel.setFastAxisName(axes[0]);
+			bmodel.setSlowAxisName(axes[1]);
 		}
 		
 		IPointGenerator<?> gen = gservice.createGenerator(pmodel);

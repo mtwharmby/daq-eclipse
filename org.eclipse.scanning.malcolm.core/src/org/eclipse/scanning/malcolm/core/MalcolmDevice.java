@@ -2,6 +2,7 @@ package org.eclipse.scanning.malcolm.core;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -16,11 +17,12 @@ import org.eclipse.scanning.api.event.core.IPublisher;
 import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.malcolm.MalcolmDeviceException;
+import org.eclipse.scanning.api.malcolm.attributes.MalcolmAttribute;
 import org.eclipse.scanning.api.malcolm.connector.IMalcolmConnectorService;
 import org.eclipse.scanning.api.malcolm.event.IMalcolmListener;
 import org.eclipse.scanning.api.malcolm.event.MalcolmEvent;
 import org.eclipse.scanning.api.malcolm.event.MalcolmEventBean;
-import org.eclipse.scanning.api.malcolm.message.JsonMessage;
+import org.eclipse.scanning.api.malcolm.message.MalcolmMessage;
 import org.eclipse.scanning.api.malcolm.message.MalcolmUtil;
 import org.eclipse.scanning.api.malcolm.message.Type;
 import org.eclipse.scanning.api.points.IPosition;
@@ -42,15 +44,23 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 
 	private static Logger logger = LoggerFactory.getLogger(MalcolmDevice.class);
 		
-	private IMalcolmConnectorService<JsonMessage>   service;
+	private IMalcolmConnectorService<MalcolmMessage>   service;
 	private boolean                          alive;
-    private JsonMessage                      stateSubscriber;
-    private JsonMessage                      scanSubscriber;
+    private MalcolmMessage                      stateSubscriber;
+    private MalcolmMessage                      scanSubscriber;
 
 	private IPublisher<ScanBean>             publisher;
+	
+	private static String STATE_ENDPOINT = "state";
+	
+	private static String STATUS_ENDPOINT = "status";
+	
+	private static String BUSY_ENDPOINT = "busy";
+	
+	private static String CURRENT_STEP_ENDPOINT = "currentStep";
 
 
-	public MalcolmDevice(String name, IMalcolmConnectorService<JsonMessage> service, IPublisher<ScanBean> publisher) throws MalcolmDeviceException {
+	public MalcolmDevice(String name, IMalcolmConnectorService<MalcolmMessage> service, IPublisher<ScanBean> publisher) throws MalcolmDeviceException {
 		
 		super(service);
     	setName(name);
@@ -61,11 +71,11 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 		logger.debug("Connecting '"+getName()+"'. Current state: "+currentState);
 		alive = true;
 		
-		stateSubscriber = connectionDelegate.createSubscribeMessage("stateMachine.state");
-		service.subscribe(this, stateSubscriber, new IMalcolmListener<JsonMessage>() {
+		stateSubscriber = connectionDelegate.createSubscribeMessage(STATE_ENDPOINT);
+		service.subscribe(this, stateSubscriber, new IMalcolmListener<MalcolmMessage>() {
 			
 			@Override
-			public void eventPerformed(MalcolmEvent<JsonMessage> e) {				
+			public void eventPerformed(MalcolmEvent<MalcolmMessage> e) {				
 				try {
 					sendScanStateChange(e);										
 				} catch (Exception ne) {
@@ -74,11 +84,11 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 			}
 		});		
 		
-		scanSubscriber  = connectionDelegate.createSubscribeMessage("attributes.currentStep");
-		service.subscribe(this, scanSubscriber, new IMalcolmListener<JsonMessage>() {
+		scanSubscriber  = connectionDelegate.createSubscribeMessage(CURRENT_STEP_ENDPOINT);
+		service.subscribe(this, scanSubscriber, new IMalcolmListener<MalcolmMessage>() {
 			
 			@Override
-			public void eventPerformed(MalcolmEvent<JsonMessage> e) {				
+			public void eventPerformed(MalcolmEvent<MalcolmMessage> e) {				
 				try {
 					sendScanEvent(e);										
 				} catch (Exception ne) {
@@ -112,9 +122,9 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 	}
 
 
-	protected void sendScanEvent(MalcolmEvent<JsonMessage> e) throws Exception {
+	protected void sendScanEvent(MalcolmEvent<MalcolmMessage> e) throws Exception {
 		
-		JsonMessage msg      = e.getBean();
+		MalcolmMessage msg      = e.getBean();
 		DeviceState newState = MalcolmUtil.getState(msg, false);
 
 		ScanBean bean = getBean();
@@ -134,9 +144,9 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 	}
 
 	private MalcolmEventBean meb;
-	protected void sendScanStateChange(MalcolmEvent<JsonMessage> e) throws Exception {
+	protected void sendScanStateChange(MalcolmEvent<MalcolmMessage> e) throws Exception {
 		
-		JsonMessage msg = e.getBean();
+		MalcolmMessage msg = e.getBean();
 		
 		DeviceState newState = MalcolmUtil.getState(msg, false);
 		
@@ -166,8 +176,8 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 	@Override
 	public DeviceState getDeviceState() throws MalcolmDeviceException {
 		try {
-			final JsonMessage message = connectionDelegate.createGetMessage(getName()+".stateMachine.state");
-			final JsonMessage reply   = service.send(this, message);
+			final MalcolmMessage message = connectionDelegate.createGetMessage(STATE_ENDPOINT);
+			final MalcolmMessage reply   = service.send(this, message);
 			if (reply.getType()==Type.ERROR) {
 				throw new MalcolmDeviceException(reply.getMessage());
 			}
@@ -182,19 +192,62 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 		}
 	}
 
+	@Override
+	public String getDeviceStatus() throws MalcolmDeviceException {
+		try {
+			final MalcolmMessage message = connectionDelegate.createGetMessage(STATUS_ENDPOINT);
+			final MalcolmMessage reply   = service.send(this, message);
+			if (reply.getType()==Type.ERROR) {
+				throw new MalcolmDeviceException(reply.getMessage());
+			}
+
+			return MalcolmUtil.getStatus(reply);
+			
+		} catch (MalcolmDeviceException mne) {
+			throw mne;
+			
+		} catch (Exception ne) {
+			throw new MalcolmDeviceException(this, "Cannot connect to device "+getName(), ne);
+		}
+	}
 
 	@Override
-	public T validate(T params) throws MalcolmDeviceException {
+	public boolean isDeviceBusy() throws MalcolmDeviceException {
+		try {
+			final MalcolmMessage message = connectionDelegate.createGetMessage(BUSY_ENDPOINT);
+			final MalcolmMessage reply   = service.send(this, message);
+			if (reply.getType()==Type.ERROR) {
+				throw new MalcolmDeviceException(reply.getMessage());
+			}
+
+			return MalcolmUtil.getBusy(reply);
+			
+		} catch (MalcolmDeviceException mne) {
+			throw mne;
+			
+		} catch (Exception ne) {
+			throw new MalcolmDeviceException(this, "Cannot connect to device "+getName(), ne);
+		}
+	}
+
+
+	@Override
+	public void validate(T params) throws MalcolmDeviceException {
 		
-		final JsonMessage msg   = connectionDelegate.createCallMessage("validate", params);
-		final JsonMessage reply = service.send(this, msg);
-        return (T)reply.getValue();
+		final MalcolmMessage msg   = connectionDelegate.createCallMessage("validate", params);
+		final MalcolmMessage reply = service.send(this, msg);
+        if (reply.getType()==Type.ERROR) {
+        	throw new MalcolmDeviceException(reply.getMessage());
+        }
 	}
 	
 	@Override
 	public void configure(T model) throws MalcolmDeviceException {
-		final JsonMessage msg   = connectionDelegate.createCallMessage("configure", model);
-		service.send(this, msg);
+		final MalcolmMessage msg   = connectionDelegate.createCallMessage("configure", model);
+		MalcolmMessage reply = service.send(this, msg);
+        if (reply.getType() == Type.ERROR) {
+        	throw new MalcolmDeviceException(reply.getMessage());
+        }
 		setModel(model);
 	}
 
@@ -205,6 +258,11 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 
 	@Override
 	public void abort() throws MalcolmDeviceException {
+		connectionDelegate.call(Thread.currentThread().getStackTrace());
+	}
+
+	@Override
+	public void disable() throws MalcolmDeviceException {
 		connectionDelegate.call(Thread.currentThread().getStackTrace());
 	}
 
@@ -231,9 +289,9 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 		setAlive(false);
 	}
 
-	private final void unsubscribe(JsonMessage subscriber) throws MalcolmDeviceException {
+	private final void unsubscribe(MalcolmMessage subscriber) throws MalcolmDeviceException {
 		if (subscriber!=null) {
-			final JsonMessage unsubscribeStatus = connectionDelegate.createUnsubscribeMessage();
+			final MalcolmMessage unsubscribeStatus = connectionDelegate.createUnsubscribeMessage();
 			unsubscribeStatus.setId(subscriber.getId());
 			service.unsubscribe(this, subscriber);
 			logger.debug("Unsubscription "+getName()+" made "+unsubscribeStatus);
@@ -264,10 +322,10 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 			final List<Exception> exceptionContainer = new ArrayList<>(1);
 			
 			// Make a listener to check for state and then add it and latch
-			IMalcolmListener<JsonMessage> stateChanger = new IMalcolmListener<JsonMessage>() {
+			IMalcolmListener<MalcolmMessage> stateChanger = new IMalcolmListener<MalcolmMessage>() {
 				@Override
-				public void eventPerformed(MalcolmEvent<JsonMessage> e) {
-					JsonMessage msg = e.getBean();
+				public void eventPerformed(MalcolmEvent<MalcolmMessage> e) {
+					MalcolmMessage msg = e.getBean();
 					try {
 						DeviceState state = MalcolmUtil.getState(msg);
 						if (state != null) {
@@ -313,5 +371,39 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 			throw new MalcolmDeviceException(this, neOther);
 		}
 
+	}
+	
+	public Object getAttributeValue(String attribute) throws MalcolmDeviceException {
+		String endpoint = attribute + ".value";
+		final MalcolmMessage message = connectionDelegate.createGetMessage(endpoint);
+		final MalcolmMessage reply   = service.send(this, message);
+		if (reply.getType()==Type.ERROR) {
+			throw new MalcolmDeviceException(reply.getMessage());
+		}
+		return reply.getValue();
+	}
+	
+	public List<MalcolmAttribute> getAllAttributes() throws MalcolmDeviceException {
+		List<MalcolmAttribute> attributeList = new LinkedList<MalcolmAttribute>();
+		String endpoint = "";
+		final MalcolmMessage message = connectionDelegate.createGetMessage(endpoint);
+		final MalcolmMessage reply   = service.send(this, message);
+		if (reply.getType()==Type.ERROR) {
+			throw new MalcolmDeviceException(reply.getMessage());
+		}
+		
+		Object wholeBlock = reply.getValue();
+		
+		if (wholeBlock instanceof Map) {
+			Map wholeBlockMap = (Map)wholeBlock;
+			
+			for (Object entry : wholeBlockMap.values()) {
+				if (entry instanceof MalcolmAttribute) {
+					attributeList.add((MalcolmAttribute)entry);
+				}
+			}
+		}
+		
+		return attributeList;
 	}
 }

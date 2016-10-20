@@ -6,16 +6,22 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.eclipse.scanning.api.IModelProvider;
 import org.eclipse.scanning.api.IScanAttributeContainer;
+import org.eclipse.scanning.api.ModelValidationException;
+import org.eclipse.scanning.api.device.models.IDetectorModel;
 import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.core.IPublisher;
 import org.eclipse.scanning.api.event.scan.DeviceInformation;
 import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.event.scan.ScanBean;
+import org.eclipse.scanning.api.malcolm.MalcolmDeviceException;
+import org.eclipse.scanning.api.malcolm.attributes.MalcolmAttribute;
 import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.scan.PositionEvent;
 import org.eclipse.scanning.api.scan.ScanningException;
@@ -25,12 +31,24 @@ import org.eclipse.scanning.api.scan.event.IRunListener;
 import org.eclipse.scanning.api.scan.event.RunEvent;
 
 /**
+ * A device should create its own model when its constructor is called. This
+ * can be done by reading the current hardware state for the device. In this
+ * case the runnable device service does not set its model. If a given device
+ * does not set its own model, when the service makes the device, it will attempt
+ * to create a new empty model and set this empty model as the current model. 
+ * This means that the device does not have a null model and the user can get
+ * the model and configure it.
+ * 
  * @see IRunnableDevice
  * @author Matthew Gerring
  *
  * @param <T>
  */
-public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<T>, IScanAttributeContainer, IPositionListenable {
+public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<T>, 
+                                                           IModelProvider<T>, 
+                                                           IScanAttributeContainer, 
+                                                           IPositionListenable,
+                                                           IActivatable {
 
 	// Data
 	protected T                          model;
@@ -48,7 +66,7 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 
 	// OSGi services and intraprocess events
 	protected IRunnableDeviceService     runnableDeviceService;
-	protected IDeviceConnectorService    connectorService;
+	protected IScannableDeviceService    connectorService;
 	private   IPublisher<ScanBean>       publisher;
 	
 	// Listeners
@@ -57,6 +75,8 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	
 	// Attributes
 	private Map<String, Object>          scanAttributes;
+	
+	private volatile boolean busy = false;
 
 	protected AbstractRunnableDevice() {
 		this.scanId     = UUID.randomUUID().toString();
@@ -85,11 +105,11 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 		this.runnableDeviceService = runnableDeviceService;
 	}
 
-	public IDeviceConnectorService getConnectorService() {
+	public IScannableDeviceService getConnectorService() {
 		return connectorService;
 	}
 
-	public void setConnectorService(IDeviceConnectorService connectorService) {
+	public void setConnectorService(IScannableDeviceService connectorService) {
 		this.connectorService = connectorService;
 	}
 
@@ -167,7 +187,7 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 		bean.setPosition(pos);
 		bean.setPreviousDeviceState(bean.getDeviceState());
 		if (size>-1) bean.setPercentComplete(((double)(count+1)/size)*100);
-
+		bean.setMessage("Point "+pos.getStepIndex()+" of "+size);
 		if (publisher != null) {
 			publisher.broadcast(bean);
 		}
@@ -288,6 +308,10 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 
 	}
 
+	@Override
+	public void disable() throws ScanningException {
+
+	}
 
 	@Override
 	public void pause() throws ScanningException {
@@ -338,9 +362,22 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 		return (A)scanAttributes.get(attributeName);
 	}
 
-	public DeviceInformation<T> getDeviceInformation() throws ScanningException {
+	/**
+	 * Do not override without calling super.getDeviceInformation()
+	 * Method is final for now to help avoid that problem.
+	 * @return
+	 * @throws ScanningException
+	 */
+	public final DeviceInformation<T> getDeviceInformation() throws ScanningException {
+		if (deviceInformation==null) deviceInformation = new DeviceInformation<T>();
 		deviceInformation.setModel(getModel());
 		deviceInformation.setState(getDeviceState());
+		deviceInformation.setStatus(getDeviceStatus());
+		deviceInformation.setBusy(isDeviceBusy());
+		deviceInformation.setAttributes(getAllAttributes());
+		if (getName()!=null) deviceInformation.setName(getName());
+		deviceInformation.setLevel(getLevel());
+		deviceInformation.setActivated(isActivated());
  		return deviceInformation;
 	}
 
@@ -354,5 +391,79 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 
 	public void setPrimaryScanDevice(boolean primaryScanDevice) {
 		this.primaryScanDevice = primaryScanDevice;
+	}
+	
+	/**
+	 * If ovrriding don't forget the old super.validate(...)
+	 */
+	@Override
+	public void validate(T model) throws Exception {
+		if (model instanceof IDetectorModel) {
+			IDetectorModel dmodel = (IDetectorModel)model;
+			if (dmodel.getExposureTime()<=0) throw new ModelValidationException("The exposure time for '"+getName()+"' must be non-zero!", model, "exposureTime");
+		}
+	}
+	
+	private boolean activated = false;
+
+	@Override
+	public boolean isActivated() {
+		return activated;
+	}
+	
+	@Override
+	public boolean setActivated(boolean activated) {
+		boolean wasactivated = this.activated;
+		this.activated = activated;
+		return wasactivated;
+	}
+	
+	/**
+	 * Please override to provide a device status (which a malcolm device will have)
+	 * The default returns null.
+	 * @return the current device Status.
+	 */
+	public String getDeviceStatus() throws ScanningException {
+		return null;
+	}
+	
+	/**
+	 * Gets whether the device is busy or not
+	 * @return the current value of the device 'busy' flag.
+	 */
+	public boolean isDeviceBusy() throws ScanningException {
+		return busy;
+	}
+
+	/**
+	 * Call to set the busy state while the device is running.
+	 * This should not be part of IRunnableDevice, it is derived
+	 * by the device when it is running or set by the scanning when
+	 * it is scanning on CPU devices. This means that the creator of
+	 * a Detector does not have to worry about setting it busy during
+	 * scans.
+	 * 
+	 * @param busy
+	 */
+	public void setBusy(boolean busy) {
+		this.busy = busy;
+	}
+	
+	/**
+	 * Please override to get a value from the device
+	 * The default returns null.
+	 * @return the value of the specified attribute
+	 */
+	public Object getAttributeValue(String attribute) throws MalcolmDeviceException {
+		return null;
+	}
+	
+	/**
+	 * Please override to get all attributes from the device
+	 * The default returns null.
+	 * @return a list of all attributes on the device
+	 */
+	public List<MalcolmAttribute> getAllAttributes() throws MalcolmDeviceException {
+		return null;
 	}
 }

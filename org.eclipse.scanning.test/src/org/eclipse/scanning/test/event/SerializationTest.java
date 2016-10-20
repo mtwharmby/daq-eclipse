@@ -1,6 +1,7 @@
 package org.eclipse.scanning.test.event;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -9,13 +10,18 @@ import java.io.InputStream;
 import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.net.InetAddress;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.UUID;
 
 import org.eclipse.dawnsci.analysis.api.persistence.IMarshallerService;
 import org.eclipse.dawnsci.analysis.api.roi.IROI;
 import org.eclipse.dawnsci.analysis.dataset.roi.CircularROI;
+import org.eclipse.dawnsci.analysis.dataset.roi.LinearROI;
 import org.eclipse.dawnsci.analysis.dataset.roi.RectangularROI;
 import org.eclipse.dawnsci.json.MarshallerService;
+import org.eclipse.scanning.api.INamedNode;
+import org.eclipse.scanning.api.ISpringParser;
 import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.event.scan.ScanRequest;
@@ -29,8 +35,13 @@ import org.eclipse.scanning.api.points.models.GridModel;
 import org.eclipse.scanning.api.points.models.ScanRegion;
 import org.eclipse.scanning.api.points.models.SpiralModel;
 import org.eclipse.scanning.api.points.models.StepModel;
+import org.eclipse.scanning.api.scan.ui.ControlFileNode;
+import org.eclipse.scanning.api.scan.ui.ControlNode;
+import org.eclipse.scanning.api.scan.ui.ControlTree;
+import org.eclipse.scanning.event.util.JsonUtil;
 import org.eclipse.scanning.example.detector.MandelbrotModel;
 import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
+import org.eclipse.scanning.server.application.PseudoSpringParser;
 import org.eclipse.scanning.test.scan.mock.MockDetectorModel;
 import org.junit.Before;
 import org.junit.Test;
@@ -177,8 +188,8 @@ public class SerializationTest {
 		
 		final ScanRequest<?> req = new ScanRequest<IROI>();
 		req.setCompoundModel(new CompoundModel(new StepModel("fred", 0, 9, 1)));
-		req.setMonitorNames("monitor");
-		req.setMetadataScannableNames("metadata");
+		req.setMonitorNames(Arrays.asList("monitor"));
+		req.setMetadataScannableNames(Arrays.asList("metadata"));
 
 		final MockDetectorModel dmodel = new MockDetectorModel();
 		dmodel.setName("detector");
@@ -212,7 +223,7 @@ public class SerializationTest {
 
 		IROI roi = new RectangularROI(0, 0, 3, 3, 0);
 		req.setCompoundModel(new CompoundModel(gmodel, roi));
-		req.setMonitorNames("monitor");
+		req.setMonitorNames(Arrays.asList("monitor"));
 		
 		final File tmp = File.createTempFile("scan_servlet_test", ".nxs");
 		tmp.deleteOnExit();
@@ -231,11 +242,15 @@ public class SerializationTest {
 	@Test
 	public void testCompoundModel1() throws Exception {
 
+		double[] spt = {1, 2};
+		double[] ept = {3, 4};
+		
 		CompoundModel model = new CompoundModel();
-		model.setData(new SpiralModel("x", "y", 1, new BoundingBox(0, -5, 10, 5)), new CircularROI(2, 0, 0));
+		model.setData(new SpiralModel("x", "y", 1, new BoundingBox(0, -5, 10, 5)), new LinearROI(spt, ept));
 		
 		String   json = service.marshal(model, true); // TODO Should work with false here but does not, see below.
 
+		System.out.println(json);
 		// TODO This json uses the @bundle_and_class
 		// It is required to have a type: field in the model refering to the simple name of the class
 		// and replacing @bundle_and_class which is a java specific thing.
@@ -295,4 +310,141 @@ public class SerializationTest {
 	}
 
 	
+	@Test
+	public void testControlFactorySerialize() throws Exception {
+		
+		ISpringParser parser = new PseudoSpringParser();
+		InputStream in = getClass().getResourceAsStream("client-test.xml");
+		parser.parse(in);
+		
+		assertTrue(!ControlTree.getInstance().isEmpty());
+		
+		ControlTree.getInstance().build();
+		
+		String json = service.marshal(ControlTree.getInstance());
+		
+		assertTrue(json!=null);
+		
+		ControlTree factory = service.unmarshal(json, ControlTree.class);
+		
+		assertEquals(factory, ControlTree.getInstance());
+	}
+	
+	@Test
+	public void testControlFactorySerialize2() throws Exception {
+		
+		ControlTree tree = new ControlTree("fred");
+		tree.add(new ControlNode("fred", "x", 0.1));
+		tree.add(new ControlFileNode("fred", "File"));
+		tree.build();
+		
+		String json = service.marshal(tree);
+		
+		assertTrue(json!=null);
+		
+		ControlTree eert = service.unmarshal(json, ControlTree.class);
+		eert.build();
+	
+		assertEquals(eert, tree);
+	}
+
+
+	@Test
+	public void testControlFactoryToPosition() throws Exception {
+		
+		ISpringParser parser = new PseudoSpringParser();
+		InputStream in = getClass().getResourceAsStream("client-test.xml");
+		parser.parse(in);
+		
+		ControlTree tree = ControlTree.getInstance();
+		assertTrue(!tree.isEmpty());
+		
+        Iterator<INamedNode> it = tree.iterator();
+        while (it.hasNext()) {
+			INamedNode iNamedNode = (INamedNode) it.next();
+			if (iNamedNode instanceof ControlNode) {
+				((ControlNode)iNamedNode).setValue(Math.random());
+			}
+		}
+
+        tree.build();
+        IPosition pos = tree.toPosition();
+        assertTrue(pos.size()>0);
+        it = tree.iterator();
+        while (it.hasNext()) {
+			INamedNode iNamedNode = (INamedNode) it.next();
+			if (iNamedNode instanceof ControlNode) {
+				Object value = ((ControlNode)iNamedNode).getValue();
+				assertEquals(value, pos.get(iNamedNode.getName()));
+			}
+        }
+	}
+
+	
+	@Test
+	public void testRemoveDetector() throws Exception {
+		
+		final String json = "{\"@bundle_and_class\":\"bundle=org.eclipse.scanning.api&version=1.0.0.qualifier&class=org.eclipse.scanning.api.event.scan.ScanBean\","+
+		 "\"uniqueId\":\"5f67891f-4f01-48d4-9cab-ce373c5f9807\","+
+		 "\"status\":[\"bundle=org.eclipse.scanning.api&version=1.0.0.qualifier&class=org.eclipse.scanning.api.event.status.Status\",\"SUBMITTED\"],"+
+		 "\"name\":\"Scan [Grid(x, y)] with Detectors [mandelbrot] \","+
+		 "\"percentComplete\":0.0,\"userName\":\"fcp94556\",\"hostName\":\"DIAMRL5606\",\"submissionTime\":1474893775913,"+
+		 "\"scanRequest\":{\"@bundle_and_class\":\"bundle=org.eclipse.scanning.api&version=1.0.0.qualifier&class=org.eclipse.scanning.api.event.scan.ScanRequest\","+
+		     "\"compoundModel\":{\"@bundle_and_class\":\"bundle=org.eclipse.scanning.api&version=1.0.0.qualifier&class=org.eclipse.scanning.api.points.models.CompoundModel\","+
+		         "\"models\":[\"bundle=&version=&class=java.util.ArrayList\",[{\"@bundle_and_class\":\"bundle=org.eclipse.scanning.api&version=1.0.0.qualifier&class=org.eclipse.scanning.api.points.models.GridModel\",\"name\":\"Grid\",\"boundingBox\":{\"@bundle_and_class\":\"bundle=org.eclipse.scanning.api&version=1.0.0.qualifier&class=org.eclipse.scanning.api.points.models.BoundingBox\",\"fastAxisName\":\"x\",\"slowAxisName\":\"y\",\"fastAxisStart\":-84.13637953036218,\"fastAxisLength\":43.356972243563845,\"slowAxisStart\":123.33760426169476,\"slowAxisLength\":42.80505395362201},\"fastAxisName\":\"x\",\"slowAxisName\":\"y\",\"fastAxisPoints\":5,\"slowAxisPoints\":5,\"snake\":false}]]},"+
+		     "\"detectors\":{\"@bundle_and_class\":\"bundle=&version=&class=java.util.HashMap\",\"mandelbrot\":{\"@bundle_and_class\":\"bundle=org.eclipse.scanning.example&version=1.0.0.qualifier&class=org.eclipse.scanning.example.detector.MandelbrotModel\",\"maxIterations\":500,\"escapeRadius\":10.0,\"columns\":301,\"rows\":241,\"points\":1000,\"maxRealCoordinate\":1.5,\"maxImaginaryCoordinate\":1.2,\"realAxisName\":\"x\",\"imaginaryAxisName\":\"y\",\"name\":\"mandelbrot\",\"exposureTime\":0.1,\"timeout\":-1}},"+
+		     "\"ignorePreprocess\":false},"+
+		  "\"point\":0,\"size\":0,\"scanNumber\":0}";			
+	    
+		ScanBean bean = service.unmarshal(json, ScanBean.class);
+		assertTrue(bean.getScanRequest().getDetectors().size()>0);
+		
+		assertTrue(json.indexOf("\"detectors\":{")>0);
+		assertTrue(json.indexOf("\"uniqueId\":")>0);
+		assertTrue(json.indexOf("\"status\":")>0);
+		assertTrue(json.indexOf("\"scanRequest\":{")>0);
+		assertTrue(json.indexOf("\"compoundModel\":{")>0);
+		assertTrue(json.indexOf("\"models\":")>0);
+		assertTrue(json.indexOf("\"point\":0")>0);
+
+		String jsonNoDet = JsonUtil.removeProperties(json, Arrays.asList("detectors"));
+		assertTrue(jsonNoDet.indexOf("\"detectors\":{")<0);
+		assertTrue(jsonNoDet.indexOf("\"uniqueId\":")>0);
+		assertTrue(jsonNoDet.indexOf("\"status\":")>0);
+		assertTrue(jsonNoDet.indexOf("\"scanRequest\":{")>0);
+		assertTrue(jsonNoDet.indexOf("\"compoundModel\":{")>0);
+		assertTrue(jsonNoDet.indexOf("\"models\":")>0);
+		assertTrue(jsonNoDet.indexOf("\"point\":0")>0);
+		assertTrue(jsonNoDet.endsWith("\"point\":0,\"size\":0,\"scanNumber\":0}"));
+		assertTrue(jsonNoDet.indexOf(",,")<0);
+		
+		bean = service.unmarshal(jsonNoDet, ScanBean.class);
+		assertTrue(bean.getScanRequest().getDetectors()==null);
+	}
+	
+	
+	@Test
+	public void testRemoveScanRequest() throws Exception {
+		
+		final String json = "{\"@bundle_and_class\":\"bundle=org.eclipse.scanning.api&version=1.0.0.qualifier&class=org.eclipse.scanning.api.event.scan.ScanBean\","+
+		 "\"uniqueId\":\"5f67891f-4f01-48d4-9cab-ce373c5f9807\","+
+		 "\"status\":[\"bundle=org.eclipse.scanning.api&version=1.0.0.qualifier&class=org.eclipse.scanning.api.event.status.Status\",\"SUBMITTED\"],"+
+		 "\"name\":\"Scan [Grid(x, y)] with Detectors [mandelbrot] \","+
+		 "\"percentComplete\":0.0,\"userName\":\"fcp94556\",\"hostName\":\"DIAMRL5606\",\"submissionTime\":1474893775913,"+
+		 "\"scanRequest\":{\"@bundle_and_class\":\"bundle=org.eclipse.scanning.api&version=1.0.0.qualifier&class=org.eclipse.scanning.api.event.scan.ScanRequest\","+
+		     "\"compoundModel\":{\"@bundle_and_class\":\"bundle=org.eclipse.scanning.api&version=1.0.0.qualifier&class=org.eclipse.scanning.api.points.models.CompoundModel\","+
+		         "\"models\":[\"bundle=&version=&class=java.util.ArrayList\",[{\"@bundle_and_class\":\"bundle=org.eclipse.scanning.api&version=1.0.0.qualifier&class=org.eclipse.scanning.api.points.models.GridModel\",\"name\":\"Grid\",\"boundingBox\":{\"@bundle_and_class\":\"bundle=org.eclipse.scanning.api&version=1.0.0.qualifier&class=org.eclipse.scanning.api.points.models.BoundingBox\",\"fastAxisName\":\"x\",\"slowAxisName\":\"y\",\"fastAxisStart\":-84.13637953036218,\"fastAxisLength\":43.356972243563845,\"slowAxisStart\":123.33760426169476,\"slowAxisLength\":42.80505395362201},\"fastAxisName\":\"x\",\"slowAxisName\":\"y\",\"fastAxisPoints\":5,\"slowAxisPoints\":5,\"snake\":false}]]},"+
+		     "\"detectors\":{\"@bundle_and_class\":\"bundle=&version=&class=java.util.HashMap\",\"mandelbrot\":{\"@bundle_and_class\":\"bundle=org.eclipse.scanning.example&version=1.0.0.qualifier&class=org.eclipse.scanning.example.detector.MandelbrotModel\",\"maxIterations\":500,\"escapeRadius\":10.0,\"columns\":301,\"rows\":241,\"points\":1000,\"maxRealCoordinate\":1.5,\"maxImaginaryCoordinate\":1.2,\"realAxisName\":\"x\",\"imaginaryAxisName\":\"y\",\"name\":\"mandelbrot\",\"exposureTime\":0.1,\"timeout\":-1}},"+
+		     "\"ignorePreprocess\":false},"+
+		  "\"point\":0,\"size\":0,\"scanNumber\":0}";			
+	    
+		ScanBean bean = service.unmarshal(json, ScanBean.class);
+		assertTrue(bean.getScanRequest()!=null);
+
+		String jsonNoReq = JsonUtil.removeProperties(json, Arrays.asList("scanRequest"));
+		
+		bean = service.unmarshal(jsonNoReq, ScanBean.class);
+		assertTrue(bean.getScanRequest()==null);
+	}
+
 }

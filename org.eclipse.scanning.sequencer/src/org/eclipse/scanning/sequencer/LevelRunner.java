@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.eclipse.scanning.api.ILevel;
 import org.eclipse.scanning.api.INameable;
+import org.eclipse.scanning.api.annotation.AnnotationManager;
 import org.eclipse.scanning.api.annotation.scan.LevelEnd;
 import org.eclipse.scanning.api.annotation.scan.LevelStart;
 import org.eclipse.scanning.api.points.IPosition;
@@ -208,7 +209,7 @@ abstract class LevelRunner<L extends ILevel> {
 			if (eservice.isTerminated()) return;
 			eservice.shutdown();
 			eservice.awaitTermination(time, TimeUnit.SECONDS); 
-			if (!eservice.isTerminated()) {
+			if (eservice!=null && !eservice.isTerminated()) { // Might have nullified service during wait.
 				eservice.shutdownNow();
 			    throw new ScanningException("The timeout of "+timeout+"s has been reached, scan aborting. Please implement ITimeoutable to define how long your device needs to write.");
 			}
@@ -279,7 +280,7 @@ abstract class LevelRunner<L extends ILevel> {
 
 		final Map<Integer, AnnotationManager> ret = new HashMap<>();
 		for (Integer position : positionMap.keySet()) {
-			ret.put(position, new AnnotationManager(LevelStart.class, LevelEnd.class));	// Less annotations is more efficient
+			ret.put(position, new AnnotationManager(SequencerActivator.getInstance(), LevelStart.class, LevelEnd.class));	// Less annotations is more efficient
 			ret.get(position).addDevices(positionMap.get(position));
 		}
 		if (isLevelCachingAllowed()) sortedManagers = new SoftReference<Map>(ret);

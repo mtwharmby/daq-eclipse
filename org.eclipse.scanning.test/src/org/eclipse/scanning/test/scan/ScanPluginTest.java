@@ -3,11 +3,12 @@ package org.eclipse.scanning.test.scan;
 import static org.junit.Assert.assertNotNull;
 
 import org.eclipse.scanning.api.device.IRunnableDeviceService;
+import org.eclipse.scanning.api.event.EventConstants;
 import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.points.IPointGeneratorService;
 import org.eclipse.scanning.api.scan.ScanningException;
+import org.eclipse.scanning.example.scannable.MockScannableConnector;
 import org.eclipse.scanning.sequencer.RunnableDeviceServiceImpl;
-import org.eclipse.scanning.test.scan.mock.MockScannableConnector;
 import org.junit.Before;
 
 public class ScanPluginTest extends AbstractScanTest {
@@ -26,10 +27,11 @@ public class ScanPluginTest extends AbstractScanTest {
 
 	@Before
 	public void setup() throws ScanningException {
-		connector = new MockScannableConnector();
+		
+		eservice  = ScanPluginTest.eventService;
+		connector = new MockScannableConnector(eservice.createPublisher(uri, EventConstants.POSITION_TOPIC));
 		dservice  = ScanPluginTest.runnableDeviceService;
 		gservice  = ScanPluginTest.generatorService;
-		eservice  = ScanPluginTest.eventService;
 		
 		assertNotNull(runnableDeviceService);
 		assertNotNull(generatorService);

@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -14,16 +15,17 @@ import org.eclipse.core.runtime.IConfigurationElement;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Status;
+import org.eclipse.scanning.api.annotation.AnnotationManager;
+import org.eclipse.scanning.api.annotation.scan.PostConfigure;
+import org.eclipse.scanning.api.annotation.scan.PreConfigure;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
-import org.eclipse.scanning.api.device.IDeviceConnectorService;
 import org.eclipse.scanning.api.device.IRunnableDevice;
 import org.eclipse.scanning.api.device.IRunnableDeviceService;
+import org.eclipse.scanning.api.device.IScannableDeviceService;
 import org.eclipse.scanning.api.event.core.IPublisher;
 import org.eclipse.scanning.api.event.scan.DeviceInformation;
 import org.eclipse.scanning.api.event.scan.ScanBean;
-import org.eclipse.scanning.api.malcolm.IMalcolmConnection;
 import org.eclipse.scanning.api.malcolm.IMalcolmService;
-import org.eclipse.scanning.api.malcolm.MalcolmDeviceException;
 import org.eclipse.scanning.api.malcolm.models.MalcolmConnectionInfo;
 import org.eclipse.scanning.api.malcolm.models.MalcolmDetectorConfiguration;
 import org.eclipse.scanning.api.scan.ScanningException;
@@ -49,7 +51,7 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 	 * This service can not be present for some tests which run in OSGi
 	 * but mock the test laster.
 	 */
-	private static IDeviceConnectorService deviceConnectorService;	
+	private static IScannableDeviceService deviceConnectorService;	
 	
 	/**
 	 * This service must be present.
@@ -86,22 +88,15 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 			e.printStackTrace(); // Static block, intentionally do not use logging.
 		}
 	}
-	
-	
-	/**
-	 * Map of malcolm connections made.
-	 */
-	private final Map<URI, IMalcolmConnection> connections;
 
 	/**
 	 * Main constructor used in the running server by OSGi (only)
 	 */
 	public RunnableDeviceServiceImpl() {
-		connections        = new HashMap<>(3);
 	}
 	
 	// Test
-	public RunnableDeviceServiceImpl(IDeviceConnectorService deviceConnectorService) {
+	public RunnableDeviceServiceImpl(IScannableDeviceService deviceConnectorService) {
 		this();
 		RunnableDeviceServiceImpl.deviceConnectorService = deviceConnectorService;	
 	}
@@ -123,6 +118,14 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 					device.setName(name);
 					devs.put(mod.getClass(), device.getClass());
 					
+	                // If the model has a name we send it from the extension point.
+	                try {
+	                    final Method setName = mod.getClass().getMethod("setName", String.class);
+	                    setName.invoke(mod, name);
+	                } catch (Exception ignored) {
+	                	// getName() is not compulsory in the model
+	                }
+
 					if (device instanceof AbstractRunnableDevice) {
 						AbstractRunnableDevice adevice = (AbstractRunnableDevice)device;
 						final DeviceInformation info   = new DeviceInformation();
@@ -131,6 +134,8 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 						info.setId(e.getAttribute("id"));
 						info.setIcon(e.getContributor().getName()+"/"+e.getAttribute("icon"));
 						adevice.setDeviceInformation(info);
+						
+						if (adevice.getModel()==null) adevice.setModel(mod); // Empty Model
 					}
 					
 					if (!device.isVirtual()) {
@@ -192,7 +197,13 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
                 }
 			}
 			
-			if (configure) scanner.configure(model);
+			if (configure) {
+				AnnotationManager manager = new AnnotationManager(SequencerActivator.getInstance());
+				manager.addDevices(scanner);
+				manager.invoke(PreConfigure.class, model);
+				scanner.configure(model);
+				manager.invoke(PostConfigure.class, model);
+			}
 			
 			if (!scanner.isVirtual()) {
 				namedDevices.put(scanner.getName(), scanner);
@@ -231,12 +242,7 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 		if (model instanceof MalcolmDetectorConfiguration) {
 			MalcolmConnectionInfo info = ((MalcolmDetectorConfiguration) model).getConnectionInfo();
 			URI            uri = createMalcolmURI(info);
-			IMalcolmConnection conn = connections.get(uri);
-			if (conn==null || !conn.isConnected()) {
-				conn = malcolmService.createConnection(uri);
-				connections.put(uri, conn);
-			}
-			return conn.getDevice(info.getDeviceName());
+			return malcolmService.getDevice(info.getDeviceName());
 			
 		} else if (modelledDevices.containsKey(model.getClass())) {
 			@SuppressWarnings("unchecked")
@@ -273,11 +279,11 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 	}
 
 	@Override
-	public IDeviceConnectorService getDeviceConnectorService() {
+	public IScannableDeviceService getDeviceConnectorService() {
 		return deviceConnectorService;
 	}
 
-	public static void setDeviceConnectorService(IDeviceConnectorService connectorService) {
+	public static void setDeviceConnectorService(IScannableDeviceService connectorService) {
 		RunnableDeviceServiceImpl.deviceConnectorService = connectorService;
 	}
 	
@@ -289,22 +295,14 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 	
 	public void stop() {
 		this.context = null;
-		for (URI uri : connections.keySet()) {
-			try {
-				connections.get(uri).dispose();
-			} catch (MalcolmDeviceException e) {
-				e.printStackTrace();
-				logger.error("Problem closing malcolm connection to "+uri, e);
-			}
-		}
 	}
 	
     /**
      * Try to get the connector service or throw an exception
      * @return
      */
-	private IDeviceConnectorService getDeviceConnector() throws ScanningException {
-		ServiceReference<IDeviceConnectorService> ref = context.getServiceReference(IDeviceConnectorService.class);
+	private IScannableDeviceService getDeviceConnector() throws ScanningException {
+		ServiceReference<IScannableDeviceService> ref = context.getServiceReference(IScannableDeviceService.class);
 		return context.getService(ref);
 	}
 
@@ -341,15 +339,6 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 	public void _register(String name, IRunnableDevice<?> device) {
 		namedDevices.put(name, device);
 	}
-	
-	/**
-	 * Used for testing only
-	 * @param uri
-	 * @param connection
-	 */
-	public void _registerConnection(URI uri, IMalcolmConnection connection) {
-		connections.put(uri, connection);
-	}
 
 	@Override
 	public Collection<String> getRunnableDeviceNames() throws ScanningException {
@@ -357,8 +346,31 @@ public final class RunnableDeviceServiceImpl implements IRunnableDeviceService {
 	}
 
 	@Override
-	public Collection<Class<?>> getRunnableDeviceModels() throws ScanningException {
-		return modelledDevices.keySet();
+	public Collection<DeviceInformation<?>> getDeviceInformation() throws ScanningException {
+		
+		Collection<DeviceInformation<?>> ret = new ArrayList<>();
+		final Collection<String> names = getRunnableDeviceNames();
+		for (String name : names) {
+
+			if (name==null) continue;
+
+			IRunnableDevice<Object> device = getRunnableDevice(name);
+			if (device==null)  continue;		
+			if (!(device instanceof AbstractRunnableDevice)) continue;
+	
+
+			DeviceInformation<?> info = ((AbstractRunnableDevice<?>)device).getDeviceInformation();
+			ret.add(info);
+		}
+		return ret;
+	}
+
+	@Override
+	public DeviceInformation<?> getDeviceInformation(String name) throws ScanningException {
+		IRunnableDevice<Object> device = getRunnableDevice(name);
+		if (device==null)  return null;		
+		if (!(device instanceof AbstractRunnableDevice)) return null;
+		return ((AbstractRunnableDevice<?>)device).getDeviceInformation();
 	}
 
 }

@@ -6,8 +6,12 @@ import java.util.List;
 
 import org.eclipse.scanning.api.IConfigurable;
 import org.eclipse.scanning.api.ILevel;
+import org.eclipse.scanning.api.IModelProvider;
+import org.eclipse.scanning.api.IValidator;
 import org.eclipse.scanning.api.INameable;
 import org.eclipse.scanning.api.event.scan.DeviceState;
+import org.eclipse.scanning.api.malcolm.MalcolmDeviceException;
+import org.eclipse.scanning.api.malcolm.attributes.MalcolmAttribute;
 import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.scan.ScanningException;
 
@@ -35,7 +39,7 @@ import org.eclipse.scanning.api.scan.ScanningException;
  * IParserService pservice = ...// OSGi<br>
  * <br>
  * // Parse the scan command, throws an exception<br>
- * IParser<StepModel> parser = pservice.createParser(...)<br>
+ * IParserResult<StepModel> parser = pservice.createParser(...)<br>
  * // e.g. "scan x 0 5 0.1 analyser"<br>
  * <br>
  * // Now use the parser to create a generator<br>
@@ -56,13 +60,25 @@ import org.eclipse.scanning.api.scan.ScanningException;
  * @author Matthew Gerring
  *
  */
-public interface IRunnableDevice<T> extends INameable, ILevel, IConfigurable<T>, IResettableDevice {
+public interface IRunnableDevice<T> extends INameable, ILevel, IConfigurable<T>, IResettableDevice, IValidator<T>, IModelProvider<T> {
 	
 	/**
 	 * 
 	 * @return the current device State. This is not the same as the Status of the scan.
 	 */
 	public DeviceState getDeviceState() throws ScanningException;
+	
+	/**
+	 * 
+	 * @return the current device Status.
+	 */
+	public String getDeviceStatus() throws ScanningException;
+	
+	/**
+	 * 
+	 * @return the current value of the device 'busy' flag.
+	 */
+	public boolean isDeviceBusy() throws ScanningException;
 
 	/**
 	 * Blocking call to execute the scan. The position specified may be null.
@@ -125,6 +141,13 @@ public interface IRunnableDevice<T> extends INameable, ILevel, IConfigurable<T>,
 	public void abort() throws ScanningException;
 	
 	/**
+	 * Call to disable the device, stopping all activity.
+	 * 
+	 * @throws ScanningException
+	 */
+	public void disable() throws ScanningException;
+	
+	/**
 	 * Latches until this run is complete if it was initiated from a start.
 	 * If a device does not have a latch, then this method always throws an exception.
 	 * 
@@ -152,4 +175,14 @@ public interface IRunnableDevice<T> extends INameable, ILevel, IConfigurable<T>,
 	 * @return
 	 */
 	public T getModel();
+	
+	/**
+	 * Gets the value of an attribute on the device
+	 */
+	public Object getAttributeValue(String attribute) throws MalcolmDeviceException;
+	
+	/**
+	 * Gets a list of all attributes on the device
+	 */
+	public List<MalcolmAttribute> getAllAttributes() throws MalcolmDeviceException;
 }

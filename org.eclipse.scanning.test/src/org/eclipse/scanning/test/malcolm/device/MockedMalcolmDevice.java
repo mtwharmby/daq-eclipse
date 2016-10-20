@@ -1,17 +1,12 @@
 package org.eclipse.scanning.test.malcolm.device;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.eclipse.dawnsci.analysis.api.dataset.IDataset;
-import org.eclipse.dawnsci.analysis.api.dataset.ILazyWriteableDataset;
-import org.eclipse.dawnsci.analysis.api.monitor.IMonitor;
 import org.eclipse.dawnsci.analysis.api.tree.GroupNode;
-import org.eclipse.dawnsci.analysis.dataset.impl.Dataset;
-import org.eclipse.dawnsci.analysis.dataset.impl.LazyWriteableDataset;
-import org.eclipse.dawnsci.analysis.dataset.impl.Random;
 import org.eclipse.dawnsci.hdf5.nexus.NexusFileFactoryHDF5;
 import org.eclipse.dawnsci.nexus.INexusFileFactory;
 import org.eclipse.dawnsci.nexus.NXdetector;
@@ -20,15 +15,21 @@ import org.eclipse.dawnsci.nexus.NexusNodeFactory;
 import org.eclipse.dawnsci.nexus.NexusScanInfo;
 import org.eclipse.dawnsci.nexus.builder.NexusObjectProvider;
 import org.eclipse.dawnsci.nexus.builder.NexusObjectWrapper;
+import org.eclipse.january.IMonitor;
+import org.eclipse.january.dataset.Dataset;
+import org.eclipse.january.dataset.IDataset;
+import org.eclipse.january.dataset.ILazyWriteableDataset;
+import org.eclipse.january.dataset.LazyWriteableDataset;
+import org.eclipse.january.dataset.Random;
 import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.malcolm.MalcolmDeviceException;
+import org.eclipse.scanning.api.malcolm.attributes.MalcolmAttribute;
 import org.eclipse.scanning.api.malcolm.event.MalcolmEventBean;
 import org.eclipse.scanning.api.malcolm.models.MapMalcolmDetectorModel;
 import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.scan.ScanningException;
+import org.eclipse.scanning.connector.epics.EpicsV4ConnectorService;
 import org.eclipse.scanning.malcolm.core.AbstractMalcolmDevice;
-
-import uk.ac.diamond.malcolm.jacksonzeromq.connector.ZeromqConnectorService;
 
 class MockedMalcolmDevice extends AbstractMalcolmDevice<MapMalcolmDetectorModel> {
 	
@@ -66,7 +67,7 @@ class MockedMalcolmDevice extends AbstractMalcolmDevice<MapMalcolmDetectorModel>
 	
 	MockedMalcolmDevice(String name, final LatchDelegate latcher) throws ScanningException {
 		
-		super(new ZeromqConnectorService()); // Hard coded, that's the way we role in tests.
+		super(new EpicsV4ConnectorService()); // Hard coded, that's the way we role in tests.
 		this.latcher = latcher;
 		this.taskRunLock    = new ReentrantLock(true);
 		setDeviceState(DeviceState.IDLE);
@@ -123,13 +124,13 @@ class MockedMalcolmDevice extends AbstractMalcolmDevice<MapMalcolmDetectorModel>
 	}
 
 	@Override
-	public MapMalcolmDetectorModel validate(MapMalcolmDetectorModel model) throws MalcolmDeviceException {
+	public void validate(MapMalcolmDetectorModel model) throws MalcolmDeviceException {
 		Map<String, Object> params = model.getParameterMap();
 		if (!params.containsKey("shape")) throw new MalcolmDeviceException(this, "shape must be set!");
 		if (!params.containsKey("nframes")) throw new MalcolmDeviceException(this, "nframes must be set!");
 		if (!params.containsKey("file")) throw new MalcolmDeviceException(this, "file must be set!");
 		if (!params.containsKey("exposure")) throw new MalcolmDeviceException(this, "exposure must be set!");
-		return null;
+		return;
 	}
 
 	@Override
@@ -206,6 +207,8 @@ class MockedMalcolmDevice extends AbstractMalcolmDevice<MapMalcolmDetectorModel>
 	 */
 	protected void run(final Map<String, Object> params) throws Exception {
 
+		setDeviceState(DeviceState.PRERUN); // Devices go into prerun before running
+		
 		setDeviceState(DeviceState.RUNNING); // Will send an event
 
         int amount = (int)params.get("nframes");
@@ -264,6 +267,8 @@ class MockedMalcolmDevice extends AbstractMalcolmDevice<MapMalcolmDetectorModel>
     			ne.printStackTrace();
     			
 			}
+    		
+    		setDeviceState(DeviceState.POSTRUN); // Devices go into postrun after running
 			
 			setDeviceState(DeviceState.READY); // State change
 	        sendEvent(new MalcolmEventBean(getState())); // Scan end event
@@ -399,5 +404,13 @@ class MockedMalcolmDevice extends AbstractMalcolmDevice<MapMalcolmDetectorModel>
 	public void reset() throws MalcolmDeviceException {
 		// TODO Auto-generated method stub
 		
+	}
+	
+	public Object getAttributeValue(String attribute) {
+		return null;
+	}
+	
+	public List<MalcolmAttribute> getAllAttributes() {
+		return null;
 	}
 }

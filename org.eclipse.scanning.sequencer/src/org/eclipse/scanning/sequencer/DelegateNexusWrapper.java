@@ -1,18 +1,18 @@
 package org.eclipse.scanning.sequencer;
 
-import org.eclipse.dawnsci.analysis.api.dataset.Dtype;
-import org.eclipse.dawnsci.analysis.api.dataset.IDataset;
-import org.eclipse.dawnsci.analysis.api.dataset.ILazyWriteableDataset;
-import org.eclipse.dawnsci.analysis.api.dataset.SliceND;
-import org.eclipse.dawnsci.analysis.dataset.impl.DatasetFactory;
 import org.eclipse.dawnsci.nexus.INexusDevice;
 import org.eclipse.dawnsci.nexus.NXpositioner;
 import org.eclipse.dawnsci.nexus.NexusNodeFactory;
 import org.eclipse.dawnsci.nexus.NexusScanInfo;
 import org.eclipse.dawnsci.nexus.builder.NexusObjectProvider;
 import org.eclipse.dawnsci.nexus.builder.NexusObjectWrapper;
+import org.eclipse.january.dataset.DatasetFactory;
+import org.eclipse.january.dataset.IDataset;
+import org.eclipse.january.dataset.ILazyWriteableDataset;
+import org.eclipse.january.dataset.SliceND;
 import org.eclipse.scanning.api.AbstractScannable;
 import org.eclipse.scanning.api.IScannable;
+import org.eclipse.scanning.api.annotation.scan.ScanFinally;
 import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.scan.rank.IScanRankService;
 import org.eclipse.scanning.api.scan.rank.IScanSlice;
@@ -36,6 +36,12 @@ class DelegateNexusWrapper extends AbstractScannable<Object> implements INexusDe
 		this.scannable = scannable;
 		
 	}
+	
+	@ScanFinally
+	public void clean() {
+		lzDemand = null;
+		lzValue  = null;
+	}
 
 	public NexusObjectProvider<NXpositioner> getNexusProvider(NexusScanInfo info) {
 		// FIXME the AxisModel should be used here to work out axes if it is non-null
@@ -43,10 +49,10 @@ class DelegateNexusWrapper extends AbstractScannable<Object> implements INexusDe
 		final NXpositioner positioner = NexusNodeFactory.createNXpositioner();
 		positioner.setNameScalar(scannable.getName());
 
-		this.lzDemand = positioner.initializeLazyDataset(FIELD_NAME_DEMAND_VALUE, 1, Dtype.FLOAT64);
+		this.lzDemand = positioner.initializeLazyDataset(FIELD_NAME_DEMAND_VALUE, 1, Double.class);
 		lzDemand.setChunking(new int[]{1});
 		
-		this.lzValue  = positioner.initializeLazyDataset(NXpositioner.NX_VALUE, info.getRank(), Dtype.FLOAT64);
+		this.lzValue  = positioner.initializeLazyDataset(NXpositioner.NX_VALUE, info.getRank(), Double.class);
 		lzValue.setChunking(info.createChunk(1)); // TODO Might be slow, need to check this
 
 		return new NexusObjectWrapper<NXpositioner>(scannable.getName(), positioner, NXpositioner.NX_VALUE);

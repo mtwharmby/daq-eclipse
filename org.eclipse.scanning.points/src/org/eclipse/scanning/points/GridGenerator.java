@@ -2,9 +2,9 @@ package org.eclipse.scanning.points;
 
 import java.util.Iterator;
 
+import org.eclipse.scanning.api.ModelValidationException;
 import org.eclipse.scanning.api.points.AbstractGenerator;
 import org.eclipse.scanning.api.points.IPosition;
-import org.eclipse.scanning.api.points.PointsValidationException;
 import org.eclipse.scanning.api.points.models.GridModel;
 
 class GridGenerator extends AbstractGenerator<GridModel> {
@@ -17,11 +17,9 @@ class GridGenerator extends AbstractGenerator<GridModel> {
 
 	@Override
 	protected void validateModel() {
-		// As implemented, model width and/or height can be negative,
-		// and this flips the slow and/or fast point order.
-		if (model.getSlowAxisPoints() <= 0) throw new PointsValidationException("Model must have a positive number of slow axis points!");
-		if (model.getFastAxisPoints() <= 0) throw new PointsValidationException("Model must have a positive number of fast axis points!");
-		if (model.getBoundingBox() == null) throw new PointsValidationException("Model must have a BoundingBox!");
+		super.validateModel();
+		if (model.getSlowAxisPoints() <= 0) throw new ModelValidationException("Model must have a positive number of slow axis points!", model, "slowAxisPoints");
+		if (model.getFastAxisPoints() <= 0) throw new ModelValidationException("Model must have a positive number of fast axis points!", model, "fastAxisPoints");
 	}
 
 	@Override

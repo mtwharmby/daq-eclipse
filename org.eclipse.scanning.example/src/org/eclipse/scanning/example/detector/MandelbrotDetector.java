@@ -19,13 +19,8 @@
 package org.eclipse.scanning.example.detector;
 
 import java.io.IOException;
+import java.util.Random;
 
-import org.eclipse.dawnsci.analysis.api.dataset.IDataset;
-import org.eclipse.dawnsci.analysis.api.dataset.ILazyWriteableDataset;
-import org.eclipse.dawnsci.analysis.api.dataset.SliceND;
-import org.eclipse.dawnsci.analysis.dataset.impl.Dataset;
-import org.eclipse.dawnsci.analysis.dataset.impl.DatasetFactory;
-import org.eclipse.dawnsci.analysis.dataset.impl.DoubleDataset;
 import org.eclipse.dawnsci.nexus.INexusDevice;
 import org.eclipse.dawnsci.nexus.NXdetector;
 import org.eclipse.dawnsci.nexus.NexusException;
@@ -33,6 +28,12 @@ import org.eclipse.dawnsci.nexus.NexusNodeFactory;
 import org.eclipse.dawnsci.nexus.NexusScanInfo;
 import org.eclipse.dawnsci.nexus.builder.NexusObjectProvider;
 import org.eclipse.dawnsci.nexus.builder.NexusObjectWrapper;
+import org.eclipse.january.dataset.Dataset;
+import org.eclipse.january.dataset.DatasetFactory;
+import org.eclipse.january.dataset.IDataset;
+import org.eclipse.january.dataset.ILazyWriteableDataset;
+import org.eclipse.january.dataset.SliceND;
+import org.eclipse.scanning.api.annotation.scan.ScanFinally;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IWritableDetector;
 import org.eclipse.scanning.api.event.scan.DeviceState;
@@ -65,11 +66,21 @@ public class MandelbrotDetector extends AbstractRunnableDevice<MandelbrotModel> 
 	private ILazyWriteableDataset imageData;
 	private ILazyWriteableDataset spectrumData;
 	private ILazyWriteableDataset valueData;
+	private final Random random = new Random();
 
 	public MandelbrotDetector() throws IOException, ScanningException {
 		super();
 		this.model = new MandelbrotModel();
 		setDeviceState(DeviceState.IDLE);
+	}
+	
+	@ScanFinally
+	public void clean() {
+		image     = null;
+		imageData = null;
+		spectrum  = null;
+		spectrumData = null;
+		valueData = null;
 	}
 
 	@Override
@@ -99,12 +110,12 @@ public class MandelbrotDetector extends AbstractRunnableDevice<MandelbrotModel> 
 
 		int scanRank = info.getRank();
 		// We add 2 to the scan rank to include the image
-		imageData = detector.initializeLazyDataset(NXdetector.NX_DATA, scanRank + 2, Dataset.FLOAT64);
+		imageData = detector.initializeLazyDataset(NXdetector.NX_DATA, scanRank + 2, Double.class);
 		// We add 1 to the scan rank to include the spectrum
-		spectrumData = detector.initializeLazyDataset(FIELD_NAME_SPECTRUM, scanRank + 1, Dataset.FLOAT64);
+		spectrumData = detector.initializeLazyDataset(FIELD_NAME_SPECTRUM, scanRank + 1, Double.class);
 		// Total is a single scalar value (i.e. zero-dimensional) for each point in the scan
 		// Dimensions match that of the scan
-		valueData = detector.initializeLazyDataset(FIELD_NAME_VALUE, scanRank, Dataset.FLOAT64);
+		valueData = detector.initializeLazyDataset(FIELD_NAME_VALUE, scanRank, Double.class);
 
 		// Setting chunking is a very good idea if speed is required.
 		imageData.setChunking(info.createChunk(model.getRows(), model.getColumns()));
@@ -177,7 +188,7 @@ public class MandelbrotDetector extends AbstractRunnableDevice<MandelbrotModel> 
 
 			rslice = IScanRankService.getScanRankService().createScanSlice(pos);
 			sliceND = new SliceND(valueData.getShape(), valueData.getMaxShape(), rslice.getStart(), rslice.getStop(), rslice.getStep());
-			valueData.setSlice(null, DoubleDataset.createFromObject(value), sliceND);
+			valueData.setSlice(null, DatasetFactory.createFromObject(value), sliceND);
 
 		} catch (Exception e) {
 			// Change state to fault if exception is caught
@@ -200,7 +211,7 @@ public class MandelbrotDetector extends AbstractRunnableDevice<MandelbrotModel> 
 		final double yStop = model.getMaxImaginaryCoordinate();
 		final double yStep = (yStop - yStart) / (rows - 1);
 		double y;
-		IDataset juliaSet = new DoubleDataset(rows,columns);
+		IDataset juliaSet = DatasetFactory.zeros(rows,columns);
 		for (int yIndex = 0; yIndex < rows; yIndex++) {
 			y = yStart + yIndex * yStep;
 			IDataset line = calculateJuliaSetLine(a, b, y, xStart, xStop, columns);
@@ -217,7 +228,7 @@ public class MandelbrotDetector extends AbstractRunnableDevice<MandelbrotModel> 
 	private IDataset calculateJuliaSetLine(final double a, final double b, final double y, final double xStart, final double xStop, final int numPoints) {
 		final double xStep = (xStop - xStart) / (numPoints - 1);
 		double x;
-		IDataset juliaSetLine = new DoubleDataset(numPoints);
+		IDataset juliaSetLine = DatasetFactory.zeros(numPoints);
 		for (int xIndex = 0; xIndex < numPoints; xIndex++) {
 			x = xStart + xIndex * xStep;
 			juliaSetLine.set(julia(x, y, a, b), xIndex);
@@ -253,11 +264,47 @@ public class MandelbrotDetector extends AbstractRunnableDevice<MandelbrotModel> 
 		// If modulus > 1.0, normalise the result
 		// (Theoretically, I think this should make the value roughly independent of MAX_ITERATIONS and ESCAPE_RADIUS)
 		if (modulus > 1.0) {
-			return iteration - (Math.log(Math.log(modulus)) / Math.log(2.0));
+			return addNoise(iteration - (Math.log(Math.log(modulus)) / Math.log(2.0)));
 		}
 		// Otherwise just return the iteration count
-		return iteration;
+		return addNoise(iteration);
 	}
 
+	/**
+	 * Adds random noise to the data if specified by the model.
+	 * <p>
+	 * First checks if noise is enabled, if not just returns the value. Then checks if the exposure is greater than the
+	 * "noise free exposure" if it is, return the value unchanged. Finally if noise is enabled and the exposure time is
+	 * below the noise free exposure time then noise will be added proportional to the exposure time.
+	 * 
+	 * @param value
+	 * @return value with noise added, if model specifies it
+	 */
+	private double addNoise(double value) {
+		// If noise is disabled just return the value
+		if (!model.isEnableNoise()) {
+			return value;
+		}
+		// If the exposure time is longer than the noise free exposure time just return the value
+		else if (model.getExposureTime() >= model.getNoiseFreeExposureTime()) {
+			return value;
+		}
+		// Add noise dependent on the exposure time
+		else {
+			// noiseFraction is between 0 and 1 where 0 is pure signal and 1 means pure noise
+			double noiseFraction = (model.getNoiseFreeExposureTime() - model.getExposureTime())
+					/ model.getNoiseFreeExposureTime();
+			return value * (1 - noiseFraction) + value * random.nextDouble() * noiseFraction;
+		}
+	}
+
+	public boolean _isScanFinallyCalled() {
+		if (image     != null) return false;
+		if (imageData != null) return false;
+		if (spectrum  != null) return false;
+		if (spectrumData != null) return false;
+		if (valueData != null) return false;
+		return true;
+	}
 
 }

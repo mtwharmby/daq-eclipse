@@ -13,10 +13,8 @@ import static org.junit.Assert.assertSame;
 import java.util.Collection;
 import java.util.stream.IntStream;
 
-import org.eclipse.dawnsci.analysis.api.dataset.IDataset;
 import org.eclipse.dawnsci.analysis.api.tree.DataNode;
 import org.eclipse.dawnsci.analysis.api.tree.TreeFile;
-import org.eclipse.dawnsci.analysis.dataset.impl.Dataset;
 import org.eclipse.dawnsci.nexus.INexusFileFactory;
 import org.eclipse.dawnsci.nexus.NXdata;
 import org.eclipse.dawnsci.nexus.NXentry;
@@ -25,6 +23,9 @@ import org.eclipse.dawnsci.nexus.NXpositioner;
 import org.eclipse.dawnsci.nexus.NXroot;
 import org.eclipse.dawnsci.nexus.NexusFile;
 import org.eclipse.dawnsci.nexus.NexusUtils;
+import org.eclipse.january.DatasetException;
+import org.eclipse.january.dataset.Dataset;
+import org.eclipse.january.dataset.IDataset;
 import org.eclipse.scanning.api.IScannable;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IRunnableDevice;
@@ -38,7 +39,6 @@ import org.eclipse.scanning.api.scan.event.IRunListener;
 import org.eclipse.scanning.api.scan.event.RunEvent;
 import org.eclipse.scanning.api.scan.models.ScanModel;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 public class BasicScanTest extends NexusTest {
@@ -114,6 +114,7 @@ public class BasicScanTest extends NexusTest {
 		nf.openToRead();
 		
 		TreeFile nexusTree = NexusUtils.loadNexusTree(nf);
+		nf.close();
 		return (NXroot) nexusTree.getGroupNode();
 	}
 
@@ -185,7 +186,7 @@ public class BasicScanTest extends NexusTest {
 		}
 	}
 
-	private void checkMetadataScannables(final ScanModel scanModel, NXinstrument instrument) {
+	private void checkMetadataScannables(final ScanModel scanModel, NXinstrument instrument) throws DatasetException {
 		DataNode dataNode;
 		IDataset dataset;
 		int[] shape;
@@ -199,7 +200,7 @@ public class BasicScanTest extends NexusTest {
 			dataset = dataNode.getDataset().getSlice();
 			shape = dataset.getShape();
 			assertArrayEquals(new int[] { 1 }, shape);
-			assertEquals(Dataset.FLOAT64, ((Dataset) dataset).getDtype());
+			assertEquals(Dataset.FLOAT64, ((Dataset) dataset).getDType());
 			assertEquals(10.0, dataset.getDouble(0), 1e-15);
 			
 			dataNode = positioner.getDataNode(NXpositioner.NX_VALUE);
@@ -207,7 +208,7 @@ public class BasicScanTest extends NexusTest {
 			dataset = dataNode.getDataset().getSlice();
 			shape = dataset.getShape();
 			assertArrayEquals(new int[] { 1 }, shape);
-			assertEquals(Dataset.FLOAT64, ((Dataset) dataset).getDtype());
+			assertEquals(Dataset.FLOAT64, ((Dataset) dataset).getDType());
 			assertEquals(10.0, dataset.getDouble(0), 1e-15);
 		}
 	}
@@ -215,8 +216,7 @@ public class BasicScanTest extends NexusTest {
 	private IRunnableDevice<ScanModel> createStepScan(IScannable<?> monitor,
 			IScannable<?> metadataScannable, int... size) throws Exception {
 		
-		IPointGenerator<?> gen = null;
-		
+		IPointGenerator<?>[] gens = new IPointGenerator<?>[size.length];
 		// We add the outer scans, if any
 		for (int dim = size.length-1; dim>-1; dim--) {
 			final StepModel model;
@@ -226,13 +226,11 @@ public class BasicScanTest extends NexusTest {
 				model = new StepModel("neXusScannable"+(dim+1), 10,20,30); // Will generate one value at 10
 			}
 			final IPointGenerator<?> step = gservice.createGenerator(model);
-			if (gen!=null) {
-				gen = gservice.createCompoundGenerator(step, gen);
-			} else {
-				gen = step;
-			}
+			gens[dim] = step;
 		}
-	
+		
+		IPointGenerator<?> gen = gservice.createCompoundGenerator(gens);
+		
 		// Create the model for a scan.
 		final ScanModel  smodel = new ScanModel();
 		smodel.setPositionIterable(gen);

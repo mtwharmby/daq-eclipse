@@ -48,8 +48,7 @@
          id="org.eclipse.scanning.points"
          download-size="0"
          install-size="0"
-         version="0.0.0"
-         unpack="false"/>
+         version="0.0.0"/>
 
    <plugin
          id="org.eclipse.scanning.sequencer"
@@ -61,8 +60,7 @@
          id="org.eclipse.scanning.command"
          download-size="0"
          install-size="0"
-         version="0.0.0"
-         unpack="false"/>
+         version="0.0.0"/>
 
    <plugin
          id="org.eclipse.scanning.server"
@@ -78,13 +76,6 @@
          unpack="false"/>
 
    <plugin
-         id="org.zeromq"
-         download-size="0"
-         install-size="0"
-         version="0.0.0"
-         unpack="false"/>
-
-   <plugin
          id="org.eclipse.dawnsci.json"
          download-size="0"
          install-size="0"
@@ -93,6 +84,13 @@
 
    <plugin
          id="org.eclipse.dawnsci.analysis.api"
+         download-size="0"
+         install-size="0"
+         version="0.0.0"
+         unpack="false"/>
+
+   <plugin
+         id="org.eclipse.scanning.device.ui"
          download-size="0"
          install-size="0"
          version="0.0.0"

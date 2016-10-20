@@ -1,11 +1,14 @@
 package org.eclipse.scanning.api.event.scan;
 
-import java.util.Arrays;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.Iterator;
 
 import org.eclipse.scanning.api.event.status.Status;
 import org.eclipse.scanning.api.event.status.StatusBean;
 import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.points.MapPosition;
+import org.eclipse.scanning.api.points.models.AbstractPointsModel;
 
 
 /**
@@ -51,20 +54,9 @@ public final class ScanBean extends StatusBean {
 	private int       size;  
 	
 	/**
-	 * For static scans shape is constant and not estimated. However for
-	 * iterators which calculate things to generate the next point, shape 
-	 * becomes an estimation.
+	 * The rank of the scan.
 	 */
-	private int[] shape;
-	
-	/**
-	 * Shape estimation at the start of the scan is slightly
-	 * expensive because it iterates position and the indices
-	 * of the names at that position. It may be turned off to 
-	 * save the CPU for detectors which never need to know 
-	 * shape and simply append in the correct rank per position.
-	 */
-	private boolean shapeEstimationRequired = true;
+	private int       rank;
 	
 	private IPosition position;
 	
@@ -81,6 +73,46 @@ public final class ScanBean extends StatusBean {
         super();
 	}
 	
+	public ScanBean(ScanRequest<?> req) throws UnknownHostException {
+        super();
+        this.scanRequest = req;
+        this.status = Status.SUBMITTED;
+		setHostName(InetAddress.getLocalHost().getHostName());
+		setName(createNameFromRequest(req));
+	}
+
+	
+	private String createNameFromRequest(ScanRequest<?> req) {
+		
+		StringBuilder buf = new StringBuilder();
+		buf.append("Scan [");
+		for (Iterator<Object> it = req.getCompoundModel().getModels().iterator(); it.hasNext();) {
+			Object model = it.next();
+			if (model instanceof AbstractPointsModel) {
+				buf.append(((AbstractPointsModel)model).getSummary());
+			} else {
+				buf.append(model);
+			}
+			if (it.hasNext()) buf.append(", ");
+		}
+		
+		if (req.getDetectors()==null || req.getDetectors().isEmpty()) {
+			buf.append("] ");
+
+		} else {
+			buf.append("] with Detectors [");
+			for (Iterator<String> it = req.getDetectors().keySet().iterator(); it.hasNext();) {
+				String name = it.next();
+				buf.append(name);
+				if (it.hasNext()) buf.append(", ");
+			}
+			buf.append("] ");
+		}
+		
+	    return buf.toString();
+
+	}
+
 	public ScanBean(DeviceState state, String message) {
 		this(state);
 		this.message = message;
@@ -207,12 +239,19 @@ public final class ScanBean extends StatusBean {
 		IPosition tmp = new MapPosition(name, index, val);
 		this.position = tmp.compound(position);
 	}
-	
+
+	/**
+	 * @return whether the scan has just started, i.e. transitioned from a QUEUED state to a RUNNING state.
+	 */
 	public boolean scanStart() {
 		return Status.QUEUED ==previousStatus && Status.RUNNING==status;
 	}
 
+	/**
+	 * @return whether the scan has just ended, i.e. transitioned from a RUNNING/RESUMED state to a post-running state.
+	 */
 	public boolean scanEnd() {
+		if (previousStatus == null || status == null) return false; 
 		return previousStatus.isRunning() && status.isFinal();
 	}
 
@@ -230,8 +269,6 @@ public final class ScanBean extends StatusBean {
 		result = prime * result + ((previousDeviceState == null) ? 0 : previousDeviceState.hashCode());
 		result = prime * result + scanNumber;
 		result = prime * result + ((scanRequest == null) ? 0 : scanRequest.hashCode());
-		result = prime * result + Arrays.hashCode(shape);
-		result = prime * result + (shapeEstimationRequired ? 1231 : 1237);
 		result = prime * result + size;
 		return result;
 	}
@@ -283,10 +320,6 @@ public final class ScanBean extends StatusBean {
 				return false;
 		} else if (!scanRequest.equals(other.scanRequest))
 			return false;
-		if (!Arrays.equals(shape, other.shape))
-			return false;
-		if (shapeEstimationRequired != other.shapeEstimationRequired)
-			return false;
 		if (size != other.size)
 			return false;
 		return true;
@@ -307,21 +340,4 @@ public final class ScanBean extends StatusBean {
 	public void setDeviceName(String deviceName) {
 		this.deviceName = deviceName;
 	}
-
-	public int[] getShape() {
-		return shape;
-	}
-
-	public void setShape(int[] shape) {
-		this.shape = shape;
-	}
-
-	public boolean isShapeEstimationRequired() {
-		return shapeEstimationRequired;
-	}
-
-	public void setShapeEstimationRequired(boolean shapeEstimationRequired) {
-		this.shapeEstimationRequired = shapeEstimationRequired;
-	}
-
 }

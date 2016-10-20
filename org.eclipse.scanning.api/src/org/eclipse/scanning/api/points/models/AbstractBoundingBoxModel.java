@@ -4,6 +4,8 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.eclipse.scanning.api.annotation.UiHidden;
+import org.eclipse.scanning.api.annotation.ui.DeviceType;
+import org.eclipse.scanning.api.annotation.ui.EditType;
 import org.eclipse.scanning.api.annotation.ui.FieldDescriptor;
 
 
@@ -17,14 +19,14 @@ import org.eclipse.scanning.api.annotation.ui.FieldDescriptor;
  */
 public abstract class AbstractBoundingBoxModel extends AbstractPointsModel implements IBoundingBoxModel {
 
-	@FieldDescriptor(visible=false)
+	@FieldDescriptor(edit=EditType.COMPOUND, hint="The bounding box is automatically calculated from the scan regions shown in the main plot.") // We edit this with a popup.
 	private BoundingBox boundingBox;
 
-	@FieldDescriptor(label="Fast", hint="The name of the scannable in the fast direction, for instance 'x'.") // TODO Right?
-	private String      fastAxisName = "x";
+	@FieldDescriptor(label="Fast Axis", device=DeviceType.SCANNABLE, hint="The name of the scannable in the fast direction, for instance 'stage_x'.") // TODO Right?
+	private String      fastAxisName = "stage_x";
 
-	@FieldDescriptor(label="Slow", hint="The name of the scannable in the fast direction, for instance 'y'.")  // TODO Right?
-	private String      slowAxisName = "y";
+	@FieldDescriptor(label="Slow Axis", device=DeviceType.SCANNABLE, hint="The name of the scannable in the fast direction, for instance 'stage_y'.")  // TODO Right?
+	private String      slowAxisName = "stage_y";
 
 	protected AbstractBoundingBoxModel() {
 		super();
@@ -46,8 +48,11 @@ public abstract class AbstractBoundingBoxModel extends AbstractPointsModel imple
 	public void setBoundingBox(BoundingBox newValue) {
 		BoundingBox oldValue = this.boundingBox;
 		this.boundingBox = newValue;
+		boundingBox.setFastAxisName(getFastAxisName());
+		boundingBox.setSlowAxisName(getSlowAxisName());
 		this.pcs.firePropertyChange("boundingBox", oldValue, newValue);
 	}
+
 	@UiHidden
 	public String getFastAxisName() {
 		return fastAxisName;
@@ -55,6 +60,7 @@ public abstract class AbstractBoundingBoxModel extends AbstractPointsModel imple
 	public void setFastAxisName(String newValue) {
 		String oldValue = this.fastAxisName;
 		this.fastAxisName = newValue;
+		if (boundingBox!=null) boundingBox.setFastAxisName(fastAxisName);
 		this.pcs.firePropertyChange("fastAxisName", oldValue, newValue);
 	}
 	@UiHidden
@@ -64,6 +70,7 @@ public abstract class AbstractBoundingBoxModel extends AbstractPointsModel imple
 	public void setSlowAxisName(String newValue) {
 		String oldValue = this.slowAxisName;
 		this.slowAxisName = newValue;
+		if (boundingBox!=null) boundingBox.setSlowAxisName(slowAxisName);
 		this.pcs.firePropertyChange("slowAxisName", oldValue, newValue);
 	}
 	@Override
@@ -104,6 +111,12 @@ public abstract class AbstractBoundingBoxModel extends AbstractPointsModel imple
 	@Override
 	public List<String> getScannableNames() {
 		return Arrays.asList(getFastAxisName(), getSlowAxisName());
+	}
+
+	@Override
+	public String toString() {
+		return getClass().getSimpleName()+" [boundingBox=" + boundingBox + ", fastAxisName=" + fastAxisName
+				+ ", slowAxisName=" + slowAxisName + "]";
 	}
 
 }

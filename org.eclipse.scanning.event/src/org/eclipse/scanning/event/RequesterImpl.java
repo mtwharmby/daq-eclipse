@@ -1,6 +1,7 @@
 package org.eclipse.scanning.event;
 
 import java.net.URI;
+import java.util.concurrent.TimeUnit;
 
 import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.IEventService;
@@ -11,6 +12,7 @@ import org.eclipse.scanning.api.event.core.IRequester;
 import org.eclipse.scanning.api.event.core.IPublisher;
 import org.eclipse.scanning.api.event.core.ISubscriber;
 import org.eclipse.scanning.api.event.core.ResponseConfiguration;
+import org.eclipse.scanning.api.event.core.ResponseConfiguration.ResponseType;
 
 class RequesterImpl<T extends IdBean> extends AbstractRequestResponseConnection implements IRequester<T> {
 	
@@ -19,11 +21,23 @@ class RequesterImpl<T extends IdBean> extends AbstractRequestResponseConnection 
 
 	RequesterImpl(URI uri, String reqTopic, String resTopic, IEventService eservice) {
 		super(uri, reqTopic, resTopic, eservice);
-		responseConfiguration = ResponseConfiguration.DEFAULT;
+		long     time = ResponseConfiguration.DEFAULT.getTimeout();
+		TimeUnit unit = ResponseConfiguration.DEFAULT.getTimeUnit();
+		responseConfiguration = new ResponseConfiguration(ResponseType.ONE, time, unit);
+	}
+	
+	@Override
+	public void setTimeout(long time, TimeUnit unit) {
+		responseConfiguration.setTimeout(time, unit);
+	}
+	
+	@Override
+	public T post(final T request) throws EventException, InterruptedException {
+        return post(request, null);
 	}
 
 	@Override
-	public T post(final T request) throws EventException, InterruptedException {
+	public T post(final T request, ResponseConfiguration.ResponseWaiter waiter) throws EventException, InterruptedException {
 
 		// Something to listen
         final ISubscriber<IBeanListener<T>>  receive = eservice.createSubscriber(getUri(), getResponseTopic());
@@ -45,7 +59,7 @@ class RequesterImpl<T extends IdBean> extends AbstractRequestResponseConnection 
 	        // Send the request
 	        send.broadcast(request);
 	        
-	        responseConfiguration.latch(); // Wait or die trying
+	        responseConfiguration.latch(waiter); // Wait or die trying
 	        
 	        return request;
 	        

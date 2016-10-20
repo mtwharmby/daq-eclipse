@@ -13,12 +13,13 @@
 	<modules>
         <module>org.eclipse.scanning.target.platform</module>
 		<module>../org.eclipse.dawnsci</module>
-		<module>../../jeromq</module>
 
 		<module>org.eclipse.scanning.api</module>
 		<module>org.eclipse.scanning.command</module>
+		<module>org.eclipse.scanning.connector.epics</module>
 		<module>org.eclipse.scanning.event</module>
 		<module>org.eclipse.scanning.event.ui</module>
+		<module>org.eclipse.scanning.device.ui</module>
 		<module>org.eclipse.scanning.example</module>
 		<module>org.eclipse.scanning.example.xcen</module>
 		<module>org.eclipse.scanning.example.xcen.test</module>
@@ -31,7 +32,6 @@
 		
 		<module>uk.ac.diamond.daq.activemq.connector</module>
 		<module>uk.ac.diamond.daq.activemq.connector.test</module>
-		<module>uk.ac.diamond.daq.malcolm.connector</module>
 	</modules>
 
 	<properties>

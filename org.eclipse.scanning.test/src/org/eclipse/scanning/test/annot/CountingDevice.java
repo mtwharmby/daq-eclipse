@@ -5,9 +5,12 @@ import java.util.Map;
 
 import org.eclipse.scanning.api.AbstractScannable;
 import org.eclipse.scanning.api.annotation.scan.LevelStart;
+import org.eclipse.scanning.api.annotation.scan.PostConfigure;
+import org.eclipse.scanning.api.annotation.scan.PreConfigure;
 import org.eclipse.scanning.api.annotation.scan.ScanEnd;
 import org.eclipse.scanning.api.annotation.scan.ScanStart;
 import org.eclipse.scanning.api.points.IPosition;
+import org.eclipse.scanning.api.scan.ScanInformation;
 
 /**
  * 
@@ -23,6 +26,18 @@ public class CountingDevice extends AbstractScannable<Double> {
 		
 	}
 	
+	@PreConfigure
+    public final void configure(ScanInformation info) throws Exception {
+		if (info==null) throw new Exception("No information!");
+        count(Thread.currentThread().getStackTrace());
+	}
+
+	@PostConfigure
+    public final void configured(ScanInformation info) throws Exception {
+		if (info==null) throw new Exception("No information!");
+        count(Thread.currentThread().getStackTrace());
+	}
+	
 	@LevelStart
     public final void prepare() throws Exception {
         count(Thread.currentThread().getStackTrace());
@@ -30,7 +45,7 @@ public class CountingDevice extends AbstractScannable<Double> {
 	
     @ScanStart
     public final void prepareVoltages() throws Exception {
-    	// Do a floating point op
+    	// Do a floating point op for timings
         double v1 = 2;
         double v2 = 2;
         double s = v1*v2;

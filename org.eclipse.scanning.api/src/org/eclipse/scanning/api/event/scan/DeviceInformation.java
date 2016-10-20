@@ -1,13 +1,20 @@
 package org.eclipse.scanning.api.event.scan;
 
+import java.lang.reflect.Field;
+import java.util.Arrays;
+import java.util.List;
+
+import org.eclipse.scanning.api.IModelProvider;
+import org.eclipse.scanning.api.malcolm.attributes.MalcolmAttribute;
+
 /**
  * 
- * Information about a given device.
+ * Information about a given device. It may be an IRunnabDevice or an IScannableDevice.
  * 
  * @author Matthew Gerring
  *
  */
-public class DeviceInformation<T> {
+public class DeviceInformation<T> implements IModelProvider<T> {
 	
 	/**
 	 * The device state, for instance, IDLE, READY, PAUSED, FAULT etc.
@@ -18,6 +25,11 @@ public class DeviceInformation<T> {
 	 * Device name used in scan
 	 */
 	private String name;
+	
+	/**
+	 * Level device will be run at
+	 */
+	private int level;
 	
 	/**
 	 * Label visible in UI table
@@ -53,6 +65,49 @@ public class DeviceInformation<T> {
 	 */
 	private T model;
 	
+	/**
+	 * The unit for the device, if any
+	 */
+	private String unit;
+	
+	/**
+	 * The upper limit or null if none exists.
+	 */
+	private Object upper;
+	
+	/**
+	 * The lower limit or null if none exists.
+	 */
+	private Object lower;
+	
+	/**
+	 * Allowed values if value has discrete options
+	 */
+	private Object[] permittedValues;
+
+	/**
+	 * Holds activated state of device, if any.
+	 * Activated devices are used when a scan is constructed
+	 * and the state is saved. 
+	 */
+	private boolean activated = false;
+	
+	/**
+	 * The device status, free text to describe the current status of the device.
+	 */
+	private String status;
+	
+	/**
+	 * Whether the device is busy or not
+	 */
+	private boolean busy;
+	
+	/**
+	 * List of all attributes
+	 */
+	private List<MalcolmAttribute> attributes;
+
+
 	public DeviceInformation() {
 
 	}
@@ -60,6 +115,23 @@ public class DeviceInformation<T> {
 	public DeviceInformation(String name) {
 	    this.name = name;
 	}
+	
+    /**
+     * Merges in any non-null fields.
+     * @param info
+     */
+	public void merge(DeviceInformation<T> info) {
+		Field[] wfields = DeviceInformation.class.getDeclaredFields();
+		for (Field field : wfields) {
+			try {
+				Object value = field.get(info);
+				if (value!=null) field.set(this, value);
+			} catch (Exception ne) {
+				ne.printStackTrace();
+			}
+		}
+	}
+
 
 	public String getName() {
 		return name;
@@ -100,8 +172,10 @@ public class DeviceInformation<T> {
 	public void setIcon(String icon) {
 		this.icon = icon;
 	}
+	
+	
 
-	@Override
+@Override
 	public int hashCode() {
 		final int prime = 31;
 		int result = 1;
@@ -109,9 +183,16 @@ public class DeviceInformation<T> {
 		result = prime * result + ((icon == null) ? 0 : icon.hashCode());
 		result = prime * result + ((id == null) ? 0 : id.hashCode());
 		result = prime * result + ((label == null) ? 0 : label.hashCode());
+		result = prime * result + level;
+		result = prime * result + ((lower == null) ? 0 : lower.hashCode());
 		result = prime * result + ((model == null) ? 0 : model.hashCode());
 		result = prime * result + ((name == null) ? 0 : name.hashCode());
+		result = prime * result + Arrays.hashCode(permittedValues);
 		result = prime * result + ((state == null) ? 0 : state.hashCode());
+		result = prime * result + ((unit == null) ? 0 : unit.hashCode());
+		result = prime * result + ((upper == null) ? 0 : upper.hashCode());
+		result = prime * result + ((status == null) ? 0 : status.hashCode());
+		result = prime * result + ((attributes == null) ? 0 : attributes.hashCode());
 		return result;
 	}
 
@@ -144,6 +225,13 @@ public class DeviceInformation<T> {
 				return false;
 		} else if (!label.equals(other.label))
 			return false;
+		if (level != other.level)
+			return false;
+		if (lower == null) {
+			if (other.lower != null)
+				return false;
+		} else if (!lower.equals(other.lower))
+			return false;
 		if (model == null) {
 			if (other.model != null)
 				return false;
@@ -154,7 +242,31 @@ public class DeviceInformation<T> {
 				return false;
 		} else if (!name.equals(other.name))
 			return false;
+		if (!Arrays.equals(permittedValues, other.permittedValues))
+			return false;
 		if (state != other.state)
+			return false;
+		if (unit == null) {
+			if (other.unit != null)
+				return false;
+		} else if (!unit.equals(other.unit))
+			return false;
+		if (upper == null) {
+			if (other.upper != null)
+				return false;
+		} else if (!upper.equals(other.upper))
+			return false;
+		if (status == null) {
+			if (other.status != null)
+				return false;
+		} else if (!status.equals(other.status))
+			return false;
+		if (busy != other.busy)
+			return false;
+		if (attributes == null) {
+			if (other.attributes != null)
+				return false;
+		} else if (!attributes.equals(other.attributes))
 			return false;
 		return true;
 	}
@@ -179,4 +291,79 @@ public class DeviceInformation<T> {
 	public void setState(DeviceState state) {
 		this.state = state;
 	}
+
+	public int getLevel() {
+		return level;
+	}
+
+	public void setLevel(int level) {
+		this.level = level;
+	}
+
+	public String getUnit() {
+		return unit;
+	}
+
+	public void setUnit(String unit) {
+		this.unit = unit;
+	}
+
+	public Object getUpper() {
+		return upper;
+	}
+
+	public void setUpper(Object upper) {
+		this.upper = upper;
+	}
+
+	public Object getLower() {
+		return lower;
+	}
+
+	public void setLower(Object lower) {
+		this.lower = lower;
+	}
+
+	public Object[] getPermittedValues() {
+		return permittedValues;
+	}
+	
+	public void setPermittedValues(Object[] permittedValues) {
+		this.permittedValues = permittedValues;
+	}
+	
+	public boolean isActivated() {
+		return activated;
+	}
+	
+	public boolean setActivated(boolean activated) {
+		boolean wasactivated = this.activated;
+		this.activated = activated;
+		return wasactivated;
+	}
+
+	public String getStatus() {
+		return status;
+	}
+
+	public void setStatus(String status) {
+		this.status = status;
+	}
+	
+	public boolean isBusy() {
+		return busy;
+	}
+	
+	public void setBusy(boolean busy) {
+		this.busy = busy;
+	}
+
+	public List<MalcolmAttribute> getAttributes() {
+		return attributes;
+	}
+
+	public void setAttributes(List<MalcolmAttribute> attributes) {
+		this.attributes = attributes;
+	}
+
 }

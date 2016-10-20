@@ -9,10 +9,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.eclipse.dawnsci.json.MarshallerService;
-import org.eclipse.scanning.api.device.IDeviceConnectorService;
+import org.eclipse.scanning.api.device.IScannableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IPausableDevice;
 import org.eclipse.scanning.api.device.IRunnableDevice;
+import org.eclipse.scanning.api.event.EventConstants;
 import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.event.core.IPublisher;
@@ -31,12 +32,12 @@ import org.eclipse.scanning.api.points.models.GridModel;
 import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.api.scan.models.ScanModel;
 import org.eclipse.scanning.event.EventServiceImpl;
+import org.eclipse.scanning.example.scannable.MockScannableConnector;
 import org.eclipse.scanning.points.PointGeneratorFactory;
 import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
 import org.eclipse.scanning.sequencer.RunnableDeviceServiceImpl;
 import org.eclipse.scanning.test.BrokerTest;
 import org.eclipse.scanning.test.scan.mock.MockDetectorModel;
-import org.eclipse.scanning.test.scan.mock.MockScannableConnector;
 import org.eclipse.scanning.test.scan.mock.MockWritableDetector;
 import org.eclipse.scanning.test.scan.mock.MockWritingMandelbrotDetector;
 import org.eclipse.scanning.test.scan.mock.MockWritingMandlebrotModel;
@@ -49,7 +50,7 @@ import uk.ac.diamond.daq.activemq.connector.ActivemqConnectorService;
 public class ThreadScanTest extends BrokerTest {
 	
 	private IRunnableDeviceService           sservice;
-	private IDeviceConnectorService    connector;
+	private IScannableDeviceService    connector;
 	private IPointGeneratorService          gservice;
 	private IEventService              eservice;
 	private ISubscriber<IScanListener> subscriber;
@@ -59,9 +60,13 @@ public class ThreadScanTest extends BrokerTest {
 
 	@Before
 	public void setup() throws Exception {
+		
+		ActivemqConnectorService.setJsonMarshaller(new MarshallerService(new PointsModelMarshaller()));
+		eservice   = new EventServiceImpl(new ActivemqConnectorService());
+		
 		// We wire things together without OSGi here 
 		// DO NOT COPY THIS IN NON-TEST CODE!
-		connector = new MockScannableConnector();
+		connector = new MockScannableConnector(eservice.createPublisher(uri, EventConstants.POSITION_TOPIC));
 		sservice  = new RunnableDeviceServiceImpl(connector);
 		RunnableDeviceServiceImpl impl = (RunnableDeviceServiceImpl)sservice;
 		impl._register(MockDetectorModel.class, MockWritableDetector.class);
@@ -69,8 +74,6 @@ public class ThreadScanTest extends BrokerTest {
 		
 		gservice  = new PointGeneratorFactory();
 
-		ActivemqConnectorService.setJsonMarshaller(new MarshallerService(new PointsModelMarshaller()));
-		eservice   = new EventServiceImpl(new ActivemqConnectorService());
 		// Use in memory broker removes requirement on network and external ActiveMQ process
 		// http://activemq.apache.org/how-to-unit-test-jms-code.html
 		subscriber = eservice.createSubscriber(uri, IEventService.SCAN_TOPIC); // Create an in memory consumer of messages.
@@ -161,7 +164,7 @@ public class ThreadScanTest extends BrokerTest {
 
 		// Wait for end of run for 30 seconds, otherwise we carry on (test will then likely fail)
 		if (device.getDeviceState()!=DeviceState.READY) {
-			latch(30, TimeUnit.SECONDS, DeviceState.RUNNING, DeviceState.PAUSED, DeviceState.PAUSING); // Wait until not running.
+			latch(30, TimeUnit.SECONDS, DeviceState.RUNNING, DeviceState.PAUSED, DeviceState.SEEKING); // Wait until not running.
 		}
 
 		if (exceptions.size()>0) throw exceptions.get(0);

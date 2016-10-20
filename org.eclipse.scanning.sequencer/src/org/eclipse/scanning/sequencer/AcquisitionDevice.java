@@ -9,6 +9,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.eclipse.scanning.api.IScannable;
+import org.eclipse.scanning.api.annotation.AnnotationManager;
 import org.eclipse.scanning.api.annotation.scan.PointEnd;
 import org.eclipse.scanning.api.annotation.scan.PointStart;
 import org.eclipse.scanning.api.annotation.scan.ScanAbort;
@@ -127,7 +128,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		
 		// Create the manager and populate it
 		if (manager!=null) manager.dispose(); // It is allowed to configure more than once.
-		manager = new AnnotationManager();
+		manager = new AnnotationManager(SequencerActivator.getInstance());
 		manager.addDevices(getScannables(model));
 		if (model.getMonitors()!=null) manager.addDevices(model.getMonitors());
 		manager.addDevices(model.getDetectors());
@@ -266,6 +267,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		getBean().setPreviousStatus(getBean().getStatus());
 		getBean().setStatus(Status.COMPLETE);
 		getBean().setPercentComplete(100);
+		getBean().setMessage("Scan Complete");
 		
 		// Will send the state of the scan off.
 		try {
@@ -282,7 +284,6 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		ScanInformation info = new ScanInformation();
 		info.setSize(size);
 		info.setModel(getModel());
-		info.setParent(this);
 		info.setRank(getScanRank(getModel().getPositionIterable()));
 		info.setScannableNames(getScannableNames(getModel().getPositionIterable()));
 		manager.addContext(info);
@@ -383,6 +384,11 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 			lock.unlock();
 		}
 	}
+	
+	@Override
+	public void disable() throws ScanningException {
+		// TODO Matt Gerring to implement this: call abort on all children
+	}
 
 	@Override
 	public void pause() throws ScanningException {
@@ -396,7 +402,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 			throw new ScanningException(ne);
 		}
 		
-		setDeviceState(DeviceState.PAUSING);
+		setDeviceState(DeviceState.SEEKING);
 		try {
 			awaitPaused = true;
 			if (getModel().getDetectors()!=null) for (IRunnableDevice<?> device : getModel().getDetectors()) {

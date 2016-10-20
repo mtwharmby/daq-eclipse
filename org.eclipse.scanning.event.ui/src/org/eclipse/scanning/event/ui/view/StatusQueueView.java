@@ -56,6 +56,8 @@ import org.eclipse.scanning.api.event.core.IPublisher;
 import org.eclipse.scanning.api.event.core.IQueueReader;
 import org.eclipse.scanning.api.event.core.ISubmitter;
 import org.eclipse.scanning.api.event.core.ISubscriber;
+import org.eclipse.scanning.api.event.queues.QueueViews;
+import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.event.status.AdministratorMessage;
 import org.eclipse.scanning.api.event.status.StatusBean;
 import org.eclipse.scanning.api.ui.IModifyHandler;
@@ -347,7 +349,7 @@ public class StatusQueueView extends EventConnectionView {
 		menuMan.add(pause);
 		dropDown.add(pause);
 		
-		this.pauseConsumer = new Action("Pause "+getPartName()+" Queue.\nDoes not pause running job.", IAction.AS_CHECK_BOX) {
+		this.pauseConsumer = new Action("Pause "+getPartName()+" Queue. Does not pause running job.", IAction.AS_CHECK_BOX) {
 			public void run() {
 				togglePausedConsumer(this);
 			}
@@ -758,6 +760,9 @@ public class StatusQueueView extends EventConnectionView {
 			copy.merge(bean);
 			copy.setUniqueId(UUID.randomUUID().toString());
 			copy.setMessage("Rerun of "+bean.getName());
+			copy.setStatus(org.eclipse.scanning.api.event.status.Status.SUBMITTED);
+			copy.setPercentComplete(0.0);
+			copy.setSubmissionTime(System.currentTimeMillis());
 						
 			queueConnection.submit(copy, true);
 			
@@ -883,7 +888,7 @@ public class StatusQueueView extends EventConnectionView {
 			        logger.error("Updating changed bean from topic", e);
 			        getSite().getShell().getDisplay().syncExec(new Runnable() {
 			        	public void run() {
-							ErrorDialog.openError(getViewSite().getShell(), "Cannot connect to queue", "The command server is unavailable.\n\nPlease contact your support representative.", 
+							ErrorDialog.openError(getViewSite().getShell(), "Cannot connect to queue", "The server is unavailable at "+getUriString()+".\n\nPlease contact your support representative.", 
 						              new Status(IStatus.ERROR, Activator.PLUGIN_ID, e.getMessage()));
 			        	}
 			        });
@@ -927,7 +932,7 @@ public class StatusQueueView extends EventConnectionView {
 		
 		final TableViewerColumn status = new TableViewerColumn(viewer, SWT.LEFT);
 		status.getColumn().setText("Status");
-		status.getColumn().setWidth(140);
+		status.getColumn().setWidth(80);
 		status.setLabelProvider(new ColumnLabelProvider() {
 			public String getText(Object element) {
 				return ((StatusBean)element).getStatus().toString();
@@ -935,8 +940,8 @@ public class StatusQueueView extends EventConnectionView {
 		});
 
 		final TableViewerColumn pc = new TableViewerColumn(viewer, SWT.CENTER);
-		pc.getColumn().setText("Complete (%)");
-		pc.getColumn().setWidth(120);
+		pc.getColumn().setText("Complete");
+		pc.getColumn().setWidth(70);
 		pc.setLabelProvider(new ColumnLabelProvider() {
 			public String getText(Object element) {
 				try {
@@ -949,7 +954,7 @@ public class StatusQueueView extends EventConnectionView {
 
 		final TableViewerColumn submittedDate = new TableViewerColumn(viewer, SWT.CENTER);
 		submittedDate.getColumn().setText("Date Submitted");
-		submittedDate.getColumn().setWidth(150);
+		submittedDate.getColumn().setWidth(120);
 		submittedDate.setLabelProvider(new ColumnLabelProvider() {
 			public String getText(Object element) {
 				try {
@@ -980,6 +985,7 @@ public class StatusQueueView extends EventConnectionView {
 			public String getText(Object element) {
 				try {
 					final StatusBean bean = (StatusBean)element;
+					if (bean instanceof ScanBean) return ((ScanBean)bean).getFilePath();
 		            return bean.getRunDirectory();
 				} catch (Exception e) {
 					return e.getMessage();
@@ -992,7 +998,7 @@ public class StatusQueueView extends EventConnectionView {
 		
 		final TableViewerColumn host = new TableViewerColumn(viewer, SWT.CENTER);
 		host.getColumn().setText("Host");
-		host.getColumn().setWidth(150);
+		host.getColumn().setWidth(90);
 		host.setLabelProvider(new ColumnLabelProvider() {
 			public String getText(Object element) {
 				try {
@@ -1005,7 +1011,7 @@ public class StatusQueueView extends EventConnectionView {
 
 		final TableViewerColumn user = new TableViewerColumn(viewer, SWT.CENTER);
 		user.getColumn().setText("User Name");
-		user.getColumn().setWidth(150);
+		user.getColumn().setWidth(80);
 		user.setLabelProvider(new ColumnLabelProvider() {
 			public String getText(Object element) {
 				try {
@@ -1068,7 +1074,7 @@ public class StatusQueueView extends EventConnectionView {
 		final StringBuilder buf = new StringBuilder();
 		buf.append(ID);
 		buf.append(":");
-		buf.append(createSecondaryId(beanBundleName, beanClassName, queueName, topicName, submissionQueueName));
+		buf.append(QueueViews.createSecondaryId(beanBundleName, beanClassName, queueName, topicName, submissionQueueName));
 		return buf.toString();
 	}
 	public static String createId(final String uri, final String beanBundleName, final String beanClassName, final String queueName, final String topicName, final String submissionQueueName) {
@@ -1076,7 +1082,7 @@ public class StatusQueueView extends EventConnectionView {
 		final StringBuilder buf = new StringBuilder();
 		buf.append(ID);
 		buf.append(":");
-		buf.append(createSecondaryId(uri, beanBundleName, beanClassName, queueName, topicName, submissionQueueName));
+		buf.append(QueueViews.createSecondaryId(uri, beanBundleName, beanClassName, queueName, topicName, submissionQueueName));
 		return buf.toString();
 	}
 

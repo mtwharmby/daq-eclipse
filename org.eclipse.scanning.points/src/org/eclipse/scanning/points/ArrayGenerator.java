@@ -9,14 +9,14 @@ import org.eclipse.scanning.api.points.models.ArrayModel;
 
 public class ArrayGenerator extends AbstractGenerator<ArrayModel> {
 	
-	ArrayGenerator() {
+	public ArrayGenerator() {
 		setLabel("Array Scan");
 		setDescription("Creates a scan from an array of positions");
 	}
 
 	@Override
 	protected void validateModel() {
-		// Nothing(?) to validate.
+		super.validateModel();
 	}
 
 	@Override

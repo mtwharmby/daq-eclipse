@@ -3,8 +3,8 @@ package org.eclipse.scanning.api.device;
 import java.util.Collection;
 
 import org.eclipse.scanning.api.event.core.IPublisher;
+import org.eclipse.scanning.api.event.scan.DeviceInformation;
 import org.eclipse.scanning.api.event.scan.ScanBean;
-import org.eclipse.scanning.api.malcolm.IMalcolmConnection;
 import org.eclipse.scanning.api.malcolm.IMalcolmService;
 import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.api.scan.event.IPositioner;
@@ -29,7 +29,7 @@ import org.eclipse.scanning.api.scan.event.IPositioner;
  * IParserService pservice = ...// OSGi<br>
  * <br>
  * // Parse the scan command, throws an exception<br>
- * IParser<StepModel> parser = pservice.createParser(...)<br>
+ * IParserResult<StepModel> parser = pservice.createParser(...)<br>
  * // e.g. "scan x 0 5 0.1 analyser"<br>
  * <br>
  * // Now use the parser to create a generator<br>
@@ -147,17 +147,23 @@ public interface IRunnableDeviceService {
 	 */
     Collection<String> getRunnableDeviceNames() throws ScanningException;
     
-	/**
-	 * A list of the current runnable device models which are supported for the createDevice(...) call.
-	 * 
-	 * @return
-	 * @throws ScanningException
-	 */
-    Collection<Class<?>> getRunnableDeviceModels() throws ScanningException;
-
     /**
      * Get the service being used to connect this service to the underlying hardware devices.
      * @return
      */
-    IDeviceConnectorService getDeviceConnectorService();
+    IScannableDeviceService getDeviceConnectorService();
+
+    /**
+     * Get the information for all the runnable devices currently created.
+     * @return
+     */
+	Collection<DeviceInformation<?>> getDeviceInformation() throws ScanningException;
+	
+	
+    /**
+     * Get the information for the named runnable device.
+     * @return
+     */
+	DeviceInformation<?> getDeviceInformation(String name) throws ScanningException;
+
 }

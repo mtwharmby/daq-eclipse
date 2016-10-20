@@ -1,7 +1,10 @@
 package org.eclipse.scanning.api.event.core;
 
+import java.util.concurrent.TimeUnit;
+
 import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.IdBean;
+import org.eclipse.scanning.api.event.core.ResponseConfiguration.ResponseType;
 
 /**
  * 
@@ -46,6 +49,12 @@ public interface IRequester<T extends IdBean> extends IRequestResponseConnection
 	 */
 	public void setResponseConfiguration(ResponseConfiguration rc);
 
+	/**
+	 * Set the timout on the ResponseConfiguration directly
+	 * @param time
+	 * @param unit
+	 */
+	public void setTimeout(long time, TimeUnit unit);
 
 	/**
 	 * Requests a response from the request and returns it. This 
@@ -60,5 +69,22 @@ public interface IRequester<T extends IdBean> extends IRequestResponseConnection
 	 * @throws EventException
 	 */
 	T post(T request) throws EventException, InterruptedException;
+	
+	/**
+	 * Same as post with an optional ResponseWaiter (may be null) which
+	 * provides the ability to return true if the post should carry on waiting. 
+	 * This is useful for instance in the case where a scannable is setting
+	 * position. It will have notified position recently and if the waiter thinks
+	 * it is still alive there is not reason to timeout. This is useful
+	 * in setPosition(...) calls for scannbles that can take an indeterminate
+	 * time but should still timeout if they go inactive.
+	 * 
+	 * @param request
+	 * @param waiter
+	 * @return
+	 * @throws EventException
+	 * @throws InterruptedException
+	 */
+	T post(T request, ResponseConfiguration.ResponseWaiter waiter) throws EventException, InterruptedException;
 	
 }

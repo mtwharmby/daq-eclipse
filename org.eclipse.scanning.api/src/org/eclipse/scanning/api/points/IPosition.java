@@ -1,10 +1,10 @@
 package org.eclipse.scanning.api.points;
 
-import java.util.Collection;
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.eclipse.scanning.api.device.IRunnableDeviceService;
 
@@ -20,6 +20,9 @@ import org.eclipse.scanning.api.device.IRunnableDeviceService;
  * <B>NOTE:</B> An object is available using IDeviceService.createPositioner()
  * called IPositioner which can move scannables to a given
  * position by level.
+ * <p>
+ * Implementations of this class should be immutable where possible. Where this is not
+ * possible they should not be modified once they have been fully initialized. 
  * 
  * @see IRunnableDeviceService
  * @see org.eclipse.scanning.api.scan.event.IPositioner
@@ -42,7 +45,7 @@ public interface IPosition {
 	 * 
 	 * @return name of scalars
 	 */
-	Collection<String> getNames();
+	List<String> getNames();
 
 	/**
 	 * Get the data index of this point for a given scan dimension.
@@ -135,7 +138,12 @@ public interface IPosition {
 	 * @return
 	 */
 	default int getScanRank() {
-		return 1;
+		Set<Integer> dims = new HashSet<Integer>();
+		List<String> names = getNames();
+		for (String name : names) {
+			dims.add(getIndex(name));
+		}
+		return dims.size();
 	}
 	
 	/**

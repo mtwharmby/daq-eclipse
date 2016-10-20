@@ -8,10 +8,8 @@ import org.eclipse.dawnsci.analysis.dataset.roi.PointROI;
 import org.eclipse.dawnsci.analysis.dataset.roi.PolygonalROI;
 import org.eclipse.dawnsci.analysis.dataset.roi.RectangularROI;
 import org.eclipse.scanning.api.event.scan.ScanRequest;
-import org.eclipse.scanning.api.points.IPointGeneratorService;
 import org.eclipse.scanning.api.points.models.ArrayModel;
 import org.eclipse.scanning.api.points.models.GridModel;
-import org.eclipse.scanning.api.points.models.IScanPathModel;
 import org.eclipse.scanning.api.points.models.RasterModel;
 import org.eclipse.scanning.api.points.models.StepModel;
 
@@ -26,15 +24,13 @@ import org.eclipse.scanning.api.points.models.StepModel;
  * directory of this package).
  */
 public class PyExpresser {
-	
-	private static IPointGeneratorService pointGeneratorService;
 
-	final public static String pyExpress(
-			ScanRequest<IROI> request,
+	final public static <T> String pyExpress(
+			ScanRequest<T> request,
 			boolean verbose)
 					throws Exception {
 
-		String fragment = "scan_request(";
+		String fragment = "mscan(";
 		boolean scanRequestPartiallyWritten = false;
 
 		if (request.getCompoundModel().getModels() != null
@@ -45,9 +41,9 @@ public class PyExpresser {
 			if (verbose || request.getCompoundModel().getModels().size() > 1) fragment += "[";
 			boolean listPartiallyWritten = false;
 
-			for (IScanPathModel model : request.getCompoundModel().getModels()) {  // Order is important.
+			for (Object model : request.getCompoundModel().getModels()) {  // Order is important.
 				if (listPartiallyWritten) fragment += ", ";
-				Collection<IROI> rois = pointGeneratorService.findRegions(request.getCompoundModel(), model);
+				Collection<IROI> rois = ParserServiceImpl.getPointGeneratorService().findRegions(model, request.getCompoundModel().getRegions());
 				fragment += pyExpress(model, rois, verbose);
 				listPartiallyWritten |= true;
 			}
@@ -80,7 +76,7 @@ public class PyExpresser {
 	}
 
 	final private static String pyExpress(
-			IScanPathModel model,
+			Object model,
 			Collection<IROI> rois,
 			boolean verbose)
 					throws PyExpressionNotImplementedException {
@@ -257,7 +253,7 @@ public class PyExpresser {
 		return "rect("
 					+(verbose?"origin=":"")+"("
 						+rroi.getPointX()+", "+rroi.getPointY()
-					+")"
+					+"), "
 					+(verbose?"size=":"")+"("
 						+rroi.getLengths()[0]+", "+rroi.getLengths()[1]
 					+")"
@@ -275,14 +271,6 @@ public class PyExpresser {
 
 		fragment += ")";
 		return fragment;
-	}
-
-	public static IPointGeneratorService getPointGeneratorService() {
-		return pointGeneratorService;
-	}
-
-	public static void setPointGeneratorService(IPointGeneratorService pointGeneratorService) {
-		PyExpresser.pointGeneratorService = pointGeneratorService;
 	}
 
 }

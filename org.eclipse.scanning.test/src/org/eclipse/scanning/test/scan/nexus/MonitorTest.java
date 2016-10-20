@@ -21,10 +21,8 @@ import java.util.List;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import org.eclipse.dawnsci.analysis.api.dataset.IDataset;
 import org.eclipse.dawnsci.analysis.api.tree.DataNode;
 import org.eclipse.dawnsci.analysis.api.tree.TreeFile;
-import org.eclipse.dawnsci.analysis.dataset.impl.PositionIterator;
 import org.eclipse.dawnsci.nexus.INexusFileFactory;
 import org.eclipse.dawnsci.nexus.NXdata;
 import org.eclipse.dawnsci.nexus.NXdetector;
@@ -34,6 +32,8 @@ import org.eclipse.dawnsci.nexus.NXpositioner;
 import org.eclipse.dawnsci.nexus.NXroot;
 import org.eclipse.dawnsci.nexus.NexusFile;
 import org.eclipse.dawnsci.nexus.NexusUtils;
+import org.eclipse.january.dataset.IDataset;
+import org.eclipse.january.dataset.PositionIterator;
 import org.eclipse.scanning.api.IScannable;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IRunnableDevice;
@@ -189,7 +189,7 @@ public class MonitorTest extends NexusTest {
 			dataNode = positioner.getDataNode(NXpositioner.NX_VALUE);
     		dataset = dataNode.getDataset().getSlice();
     		shape = dataset.getShape();
-    		assertArrayEquals(sizes, shape);
+    		assertArrayEquals("The value of monitor, '"+deviceName+"' is incorrect", sizes, shape);
     		
     		nxDataFieldName = deviceName + "_" + NXpositioner.NX_VALUE;
     		assertSame(dataNode, nxData.getDataNode(nxDataFieldName));
@@ -210,9 +210,10 @@ public class MonitorTest extends NexusTest {
 			smodel = new StepModel("yNex", 10,20,30); // Will generate one value at 10
 		}
 		
-		IPointGenerator<?> gen = gservice.createGenerator(smodel);
-		assertEquals(ySize, gen.size());
-		
+		IPointGenerator<?> stepGen = gservice.createGenerator(smodel);
+		assertEquals(ySize, stepGen.size());
+
+		IPointGenerator<?>[] gens = new IPointGenerator<?>[size.length];
 		// We add the outer scans, if any
 		if (size.length > 1) { 
 			for (int dim = size.length-2; dim>-1; dim--) {
@@ -223,9 +224,12 @@ public class MonitorTest extends NexusTest {
 					model = new StepModel("neXusScannable"+(dim+1), 10,20,30); // Will generate one value at 10
 				}
 				final IPointGenerator<?> step = gservice.createGenerator(model);
-				gen = gservice.createCompoundGenerator(step, gen);
+				gens[dim] = step;
 			}
 		}
+		
+		gens[size.length - 1] = stepGen;
+		IPointGenerator<?> gen = gservice.createCompoundGenerator(gens);
 	
 		// Create the model for a scan.
 		final ScanModel  scanModel = new ScanModel();

@@ -8,7 +8,7 @@ import org.eclipse.dawnsci.json.MarshallerService;
 import org.eclipse.dawnsci.nexus.INexusFileFactory;
 import org.eclipse.dawnsci.nexus.builder.impl.DefaultNexusBuilderFactory;
 import org.eclipse.dawnsci.remotedataset.test.mock.LoaderServiceMock;
-import org.eclipse.scanning.api.device.IDeviceConnectorService;
+import org.eclipse.scanning.api.device.IScannableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.models.ProcessingModel;
 import org.eclipse.scanning.api.event.IEventService;
@@ -20,6 +20,7 @@ import org.eclipse.scanning.example.detector.DarkImageDetector;
 import org.eclipse.scanning.example.detector.DarkImageModel;
 import org.eclipse.scanning.example.detector.MandelbrotDetector;
 import org.eclipse.scanning.example.detector.MandelbrotModel;
+import org.eclipse.scanning.example.scannable.MockScannableConnector;
 import org.eclipse.scanning.points.PointGeneratorFactory;
 import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
 import org.eclipse.scanning.sequencer.RunnableDeviceServiceImpl;
@@ -28,7 +29,6 @@ import org.eclipse.scanning.server.servlet.Services;
 import org.eclipse.scanning.test.TmpTest;
 import org.eclipse.scanning.test.scan.mock.MockDetectorModel;
 import org.eclipse.scanning.test.scan.mock.MockOperationService;
-import org.eclipse.scanning.test.scan.mock.MockScannableConnector;
 import org.eclipse.scanning.test.scan.mock.MockWritableDetector;
 import org.eclipse.scanning.test.scan.mock.MockWritingMandelbrotDetector;
 import org.eclipse.scanning.test.scan.mock.MockWritingMandlebrotModel;
@@ -48,7 +48,7 @@ import uk.ac.diamond.daq.activemq.connector.ActivemqConnectorService;
  */
 public class NexusTest extends TmpTest {
 	
-	protected static IDeviceConnectorService connector;
+	protected static IScannableDeviceService connector;
 	protected static IRunnableDeviceService  dservice;
 	protected static IPointGeneratorService  gservice;
 	protected static INexusFileFactory       fileFactory;
@@ -57,7 +57,7 @@ public class NexusTest extends TmpTest {
 	@BeforeClass
 	public static void setServices() throws Exception {
 		
-		connector   = new MockScannableConnector();
+		connector   = new MockScannableConnector(null);
 		dservice    = new RunnableDeviceServiceImpl(connector); // Not testing OSGi so using hard coded service.
 		gservice    = new PointGeneratorFactory();
 		fileFactory = new NexusFileFactoryHDF5();		

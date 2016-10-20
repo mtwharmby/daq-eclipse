@@ -8,10 +8,11 @@ import java.util.List;
 
 import org.eclipse.dawnsci.json.MarshallerService;
 import org.eclipse.scanning.api.IScannable;
-import org.eclipse.scanning.api.device.IDeviceConnectorService;
+import org.eclipse.scanning.api.device.IScannableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableDevice;
 import org.eclipse.scanning.api.device.IWritableDetector;
+import org.eclipse.scanning.api.event.EventConstants;
 import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.points.IPointGenerator;
 import org.eclipse.scanning.api.points.IPointGeneratorService;
@@ -26,11 +27,13 @@ import org.eclipse.scanning.api.scan.event.IRunListener;
 import org.eclipse.scanning.api.scan.event.RunEvent;
 import org.eclipse.scanning.api.scan.models.ScanModel;
 import org.eclipse.scanning.event.EventServiceImpl;
+import org.eclipse.scanning.example.scannable.MockScannable;
+import org.eclipse.scanning.example.scannable.MockScannableConnector;
 import org.eclipse.scanning.points.PointGeneratorFactory;
+import org.eclipse.scanning.points.ScanPointGeneratorFactory;
 import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
 import org.eclipse.scanning.sequencer.RunnableDeviceServiceImpl;
 import org.eclipse.scanning.test.scan.mock.MockDetectorModel;
-import org.eclipse.scanning.test.scan.mock.MockScannableConnector;
 import org.eclipse.scanning.test.scan.mock.MockWritableDetector;
 import org.eclipse.scanning.test.scan.mock.MockWritingMandelbrotDetector;
 import org.eclipse.scanning.test.scan.mock.MockWritingMandlebrotModel;
@@ -42,7 +45,7 @@ import uk.ac.diamond.daq.activemq.connector.ActivemqConnectorService;
 public class TopupTest {
 
 	protected IRunnableDeviceService                sservice;
-	protected IDeviceConnectorService       connector;
+	protected IScannableDeviceService       connector;
 	protected IPointGeneratorService        gservice;
 	protected IEventService                 eservice;
 	private IWritableDetector<MockDetectorModel>       detector;
@@ -51,18 +54,19 @@ public class TopupTest {
 
 	@Before
 	public void setup() throws ScanningException {
+
+		ActivemqConnectorService.setJsonMarshaller(new MarshallerService(new PointsModelMarshaller()));
+		eservice  = new EventServiceImpl(new ActivemqConnectorService());
+
 		// We wire things together without OSGi here 
 		// DO NOT COPY THIS IN NON-TEST CODE!
-		connector = new MockScannableConnector();
+		connector = new MockScannableConnector(null);
 		sservice  = new RunnableDeviceServiceImpl(connector);
 		RunnableDeviceServiceImpl impl = (RunnableDeviceServiceImpl)sservice;
 		impl._register(MockDetectorModel.class, MockWritableDetector.class);
 		impl._register(MockWritingMandlebrotModel.class, MockWritingMandelbrotDetector.class);
 
 		gservice  = new PointGeneratorFactory();
-
-		ActivemqConnectorService.setJsonMarshaller(new MarshallerService(new PointsModelMarshaller()));
-		eservice  = new EventServiceImpl(new ActivemqConnectorService());
 		
 		MockDetectorModel dmodel = new MockDetectorModel();
 		dmodel.setExposureTime(0.001);
@@ -85,6 +89,9 @@ public class TopupTest {
 		
 		final List<String> moved   = new ArrayList<>();
 		final IScannable<Number>   topup   = connector.getScannable("topup");
+		if (topup instanceof MockScannable) {
+			((MockScannable)topup).setRealisticMove(false);
+		}
 		((IPositionListenable)topup).addPositionListener(new IPositionListener() {
 			@Override
 			public void positionPerformed(PositionEvent evt) {
@@ -92,6 +99,9 @@ public class TopupTest {
 			}
 		});
 		final IScannable<Number>   x       = connector.getScannable("x");
+		if (x instanceof MockScannable) {
+			((MockScannable)x).setRealisticMove(false);
+		}
 		((IPositionListenable)x).addPositionListener(new IPositionListener() {
 			@Override
 			public void positionPerformed(PositionEvent evt) {
@@ -139,7 +149,7 @@ public class TopupTest {
 	private IRunnableDevice<ScanModel> createTestScanner(IScannable<?> monitor) throws Exception {
 		
 		// Create scan points for a grid and make a generator
-		GridModel gmodel = new GridModel();
+		GridModel gmodel = new GridModel("x", "y");
 		gmodel.setSlowAxisPoints(5);
 		gmodel.setFastAxisPoints(5);
 		gmodel.setBoundingBox(new BoundingBox(0,0,3,3));	

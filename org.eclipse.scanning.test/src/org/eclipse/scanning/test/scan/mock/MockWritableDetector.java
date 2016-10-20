@@ -1,6 +1,6 @@
 package org.eclipse.scanning.test.scan.mock;
 
-import org.eclipse.dawnsci.analysis.dataset.impl.Random;
+import org.eclipse.january.dataset.Random;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IWritableDetector;
 import org.eclipse.scanning.api.event.scan.DeviceState;
@@ -62,7 +62,7 @@ public class MockWritableDetector extends AbstractRunnableDevice<MockDetectorMod
 	@Override
 	public void pause() throws ScanningException {
         try {
-	        setDeviceState(DeviceState.PAUSING);
+	        setDeviceState(DeviceState.SEEKING);
 	        Thread.sleep(100);
 	        setDeviceState(DeviceState.PAUSED);
 		} catch (Exception e) {

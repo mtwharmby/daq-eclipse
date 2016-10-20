@@ -6,14 +6,14 @@ import static org.junit.Assert.assertNotNull;
 
 import java.io.File;
 
-import org.eclipse.dawnsci.analysis.api.dataset.IDataset;
 import org.eclipse.dawnsci.analysis.api.tree.DataNode;
-import org.eclipse.dawnsci.analysis.dataset.impl.PositionIterator;
 import org.eclipse.dawnsci.nexus.INexusFileFactory;
 import org.eclipse.dawnsci.nexus.NexusFile;
+import org.eclipse.january.dataset.IDataset;
+import org.eclipse.january.dataset.PositionIterator;
 import org.eclipse.scanning.api.IConfigurable;
 import org.eclipse.scanning.api.IScannable;
-import org.eclipse.scanning.api.device.IDeviceConnectorService;
+import org.eclipse.scanning.api.device.IScannableDeviceService;
 import org.eclipse.scanning.api.device.IRunnableDevice;
 import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.event.scan.DeviceState;
@@ -22,10 +22,10 @@ import org.eclipse.scanning.api.points.IPointGeneratorService;
 import org.eclipse.scanning.api.points.models.BoundingBox;
 import org.eclipse.scanning.api.points.models.GridModel;
 import org.eclipse.scanning.api.scan.models.ScanModel;
+import org.eclipse.scanning.example.scannable.MockScannableConnector;
+import org.eclipse.scanning.example.scannable.MockScannableModel;
 import org.eclipse.scanning.points.PointGeneratorFactory;
 import org.eclipse.scanning.sequencer.RunnableDeviceServiceImpl;
-import org.eclipse.scanning.test.scan.mock.MockScannableConnector;
-import org.eclipse.scanning.test.scan.mock.MockScannableModel;
 import org.eclipse.scanning.test.scan.mock.MockWritingMandlebrotModel;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -52,11 +52,11 @@ public class LowLevelDetectorPluginTest {
 
 	private IRunnableDeviceService        service;
 	private IPointGeneratorService       gservice;
-	private IDeviceConnectorService connector;
+	private IScannableDeviceService connector;
 	
 	@Before
 	public void before() {
-		connector = new MockScannableConnector();
+		connector = new MockScannableConnector(null);
 		service   = new RunnableDeviceServiceImpl(connector); // Not testing OSGi so using hard coded service.
 		gservice  = new PointGeneratorFactory();
 	}
