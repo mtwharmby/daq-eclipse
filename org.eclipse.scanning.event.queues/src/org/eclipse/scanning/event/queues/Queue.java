@@ -109,6 +109,7 @@ public class Queue<T extends Queueable> implements IQueue<T> {
 
 	@Override
 	public void stop() throws EventException {
+		status = QueueStatus.STOPPING;
 		consumer.stop();
 		status = QueueStatus.STOPPED;
 	}

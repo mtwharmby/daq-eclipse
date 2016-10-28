@@ -7,6 +7,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -16,6 +18,7 @@ import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.event.queues.IQueue;
 import org.eclipse.scanning.api.event.queues.IQueueControllerService;
 import org.eclipse.scanning.api.event.queues.IQueueService;
+import org.eclipse.scanning.api.event.queues.QueueStatus;
 import org.eclipse.scanning.api.event.queues.beans.QueueAtom;
 import org.eclipse.scanning.api.event.queues.beans.QueueBean;
 import org.eclipse.scanning.api.event.queues.beans.Queueable;
@@ -65,6 +68,9 @@ public class QueueService implements IQueueService {
 	
 	private static IQueue<QueueBean> jobQueue;
 	private static Map<String, IQueue<QueueAtom>> activeQueueRegister;
+	
+//	private final ReentrantLock activeQueueLock = new ReentrantLock(true);
+//	private final Condition stopFinished = activeQueueLock.newCondition();
 	
 	static {
 		System.out.println("Created " + IQueueService.class.getSimpleName());
@@ -150,6 +156,9 @@ public class QueueService implements IQueueService {
 
 	@Override
 	public void stop(boolean force) throws EventException {
+		//FIXME
+		System.out.println("StopAll called: "+System.currentTimeMillis());
+		
 		if (!(isActive() || jobQueue.getStatus().isActive())) {
 			logger.warn("Job-queue is not active.");
 			return;
@@ -160,6 +169,8 @@ public class QueueService implements IQueueService {
 			//Create a new HashSet here as the deRegister method changes activeQueues
 			Set<String> qIDSet = new HashSet<String>(getAllActiveQueueIDs());
 			for (String qID : qIDSet) {
+				//FIXME
+				System.out.println("StopAll called deregister "+qID+": "+System.currentTimeMillis());
 				deRegisterActiveQueue(qID, force);
 			}
 		}
@@ -174,6 +185,9 @@ public class QueueService implements IQueueService {
 
 		//Mark service as down
 		active = false;
+		
+		//FIXME
+		System.out.println("StopAll finished: "+System.currentTimeMillis());
 	}
 	
 	@Override
@@ -200,16 +214,41 @@ public class QueueService implements IQueueService {
 	@Override
 	public void deRegisterActiveQueue(String queueID, boolean force) 
 			throws EventException {
+		//FIXME
+		System.out.println(queueID+" deRegister called: "+System.currentTimeMillis());
+		
 		if (!active) throw new EventException("Queue service not started.");
+
+//		try {
+//			activeQueueLock.lock();
+//			if (activeQueueLock.isLocked()){
+//				stopFinished.await();
+//			}
+
+			//Get the queue and check that it's not started
+			IQueue<QueueAtom> activeQueue = getActiveQueue(queueID);
+			while (activeQueue.getStatus() == QueueStatus.STOPPING) {
+				try {
+					Thread.sleep(100);
+				} catch (InterruptedException iEx) {
+					iEx.printStackTrace();
+				}
+			}
+			if (activeQueue.getStatus().isActive()) {
+				throw new EventException("Active-queue " + queueID +" still running - cannot deregister.");
+			}
+
+			//Remove remaining queue processes from map
+			activeQueueRegister.remove(queueID);
+//		} catch (InterruptedException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		} finally {
+//			activeQueueLock.unlock();
+//		}
 		
-		//Get the queue and check that it's not started
-		IQueue<QueueAtom> activeQueue = getActiveQueue(queueID);
-		if (activeQueue.getStatus().isActive()) {
-			throw new EventException("Active-queue " + queueID +" still running - cannot deregister.");
-		}
-		
-		//Remove remaining queue processes from map
-		activeQueueRegister.remove(queueID);
+		//FIXME
+		System.out.println(queueID+" deRegister finished: "+System.currentTimeMillis());		
 	}
 	
 	@Override
@@ -234,6 +273,11 @@ public class QueueService implements IQueueService {
 	@Override
 	public void stopActiveQueue(String queueID, boolean force) 
 			throws EventException {
+		//FIXME
+		System.out.println(queueID+" stop called: "+System.currentTimeMillis());
+		
+//		try {
+//			activeQueueLock.lock();
 		//Check active-queue is running
 		IQueue<QueueAtom> activeQueue = getActiveQueue(queueID);
 		if (!activeQueue.getStatus().isActive()) {
@@ -251,6 +295,14 @@ public class QueueService implements IQueueService {
 		
 		//And dispose the queue afterwards
 		disposeQueue(activeQueue, false);
+//		System.out.println("lock count: "+activeQueueLock.getHoldCount());
+//		stopFinished.signal();
+//		} finally {
+//			activeQueueLock.unlock();
+//		}
+//		System.out.println("lock count: "+activeQueueLock.getHoldCount());
+		//FIXME
+		System.out.println(queueID+" stop finished: "+System.currentTimeMillis());
 	}
 	
 	private void disposeQueue(IQueue<? extends Queueable> queue, boolean nullify) throws EventException {
