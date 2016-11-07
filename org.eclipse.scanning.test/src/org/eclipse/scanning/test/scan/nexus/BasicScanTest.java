@@ -25,6 +25,7 @@ import org.eclipse.dawnsci.nexus.NexusFile;
 import org.eclipse.dawnsci.nexus.NexusUtils;
 import org.eclipse.january.DatasetException;
 import org.eclipse.january.dataset.Dataset;
+import org.eclipse.january.dataset.DatasetUtils;
 import org.eclipse.january.dataset.IDataset;
 import org.eclipse.scanning.api.IScannable;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
@@ -148,7 +149,7 @@ public class BasicScanTest extends NexusTest {
 		assertNotNull(nxData);
 
 		// Check axes
-		String[] expectedAxesNames = scannableNames.stream().map(x -> x + "_value_demand").toArray(String[]::new);
+		String[] expectedAxesNames = scannableNames.stream().map(x -> x + "_value_set").toArray(String[]::new);
 		assertAxes(nxData, expectedAxesNames);
 
 		int[] defaultDimensionMappings = IntStream.range(0, sizes.length).toArray();
@@ -160,17 +161,17 @@ public class BasicScanTest extends NexusTest {
 			NXpositioner positioner = instrument.getPositioner(scannableName);
 			assertNotNull(positioner);
 			
-			dataNode = positioner.getDataNode("value_demand");
+			dataNode = positioner.getDataNode("value_set");
 			dataset = dataNode.getDataset().getSlice();
 			shape = dataset.getShape();
 			assertEquals(1, shape.length);
 			assertEquals(sizes[i], shape[0]);
 			
-			String nxDataFieldName = scannableName + "_value_demand";
+			String nxDataFieldName = scannableName + "_value_set";
 			assertSame(dataNode, nxData.getDataNode(nxDataFieldName));
 			assertIndices(nxData, nxDataFieldName, i);
 			assertTarget(nxData, nxDataFieldName, rootNode,
-					"/entry/instrument/" + scannableName + "/value_demand");
+					"/entry/instrument/" + scannableName + "/value_set");
 
 			// Actual values should be scanD
 			dataNode = positioner.getDataNode(NXpositioner.NX_VALUE);
@@ -188,28 +189,25 @@ public class BasicScanTest extends NexusTest {
 
 	private void checkMetadataScannables(final ScanModel scanModel, NXinstrument instrument) throws DatasetException {
 		DataNode dataNode;
-		IDataset dataset;
-		int[] shape;
+		Dataset dataset;
 		for (IScannable<?> metadataScannable : scanModel.getMetadataScannables()) {
 			NXpositioner positioner = instrument.getPositioner(metadataScannable.getName());
 			assertNotNull(positioner);
 			assertEquals(metadataScannable.getName(), positioner.getNameScalar());
 			
-			dataNode = positioner.getDataNode("value_demand"); // TODO should not be here for metadata scannable
+			dataNode = positioner.getDataNode("value_set"); // TODO should not be here for metadata scannable
 			assertNotNull(dataNode);
-			dataset = dataNode.getDataset().getSlice();
-			shape = dataset.getShape();
-			assertArrayEquals(new int[] { 1 }, shape);
-			assertEquals(Dataset.FLOAT64, ((Dataset) dataset).getDType());
-			assertEquals(10.0, dataset.getDouble(0), 1e-15);
+			dataset = DatasetUtils.sliceAndConvertLazyDataset(dataNode.getDataset());
+			assertEquals(1, dataset.getSize());
+			assertEquals(Dataset.FLOAT64, dataset.getDType());
+			assertEquals(10.0, dataset.getElementDoubleAbs(0), 1e-15);
 			
 			dataNode = positioner.getDataNode(NXpositioner.NX_VALUE);
 			assertNotNull(dataNode);
-			dataset = dataNode.getDataset().getSlice();
-			shape = dataset.getShape();
-			assertArrayEquals(new int[] { 1 }, shape);
-			assertEquals(Dataset.FLOAT64, ((Dataset) dataset).getDType());
-			assertEquals(10.0, dataset.getDouble(0), 1e-15);
+			dataset = DatasetUtils.sliceAndConvertLazyDataset(dataNode.getDataset());
+			assertEquals(1, dataset.getSize());
+			assertEquals(Dataset.FLOAT64, dataset.getDType());
+			assertEquals(10.0, dataset.getElementDoubleAbs(0), 1e-15);
 		}
 	}
 

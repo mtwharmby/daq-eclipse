@@ -22,6 +22,7 @@ import org.eclipse.scanning.api.annotation.scan.ScanStart;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IPausableDevice;
 import org.eclipse.scanning.api.device.IRunnableDevice;
+import org.eclipse.scanning.api.device.models.DeviceRole;
 import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.event.status.Status;
@@ -34,7 +35,7 @@ import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.api.scan.event.IPositioner;
 import org.eclipse.scanning.api.scan.models.ScanModel;
 import org.eclipse.scanning.sequencer.nexus.INexusScanFileManager;
-import org.eclipse.scanning.sequencer.nexus.NexusScanFileManager;
+import org.eclipse.scanning.sequencer.nexus.NexusScanFileManagerFactory;
 
 /**
  * This device does a standard GDA scan at each point. If a given point is a 
@@ -87,6 +88,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		this.paused    = lock.newCondition();
 		setName("solstice_scan");
 		setPrimaryScanDevice(true);
+		setRole(DeviceRole.VIRTUAL);
 	}
 	
 	/**
@@ -99,6 +101,8 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 	@Override
 	public void configure(ScanModel model) throws ScanningException {
 		
+		long before = System.currentTimeMillis();
+		
 		setDeviceState(DeviceState.CONFIGURING);
 		setModel(model);
 		setBean(model.getBean()!=null?model.getBean():new ScanBean());
@@ -107,7 +111,6 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		
 		positioner = runnableDeviceService.createPositioner();
 		if (model.getDetectors()!=null) {
-			
 			// Make sure all devices report the same scan id
 			for (IRunnableDevice<?> device : model.getDetectors()) {
 				if (device instanceof AbstractRunnableDevice<?>) {
@@ -116,15 +119,24 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 					adevice.setPrimaryScanDevice(false);
 				}
 			}
+		}
+		
+		// create the nexus file, if appropriate
+		nexusScanFileManager = NexusScanFileManagerFactory.createNexusScanFileManager(this);
+		nexusScanFileManager.configure(model);
+		nexusScanFileManager.createNexusFile(true);
+		
+		if (model.getDetectors()!=null) {
 			runners = new DeviceRunner(model.getDetectors());
-			writers = new DeviceWriter(model.getDetectors());
+			if (nexusScanFileManager.isNexusWritingEnabled()) {
+				writers = new DeviceWriter(model.getDetectors());
+			} else {
+				writers = LevelRunner.createEmptyRunner();
+			}
 		} else {
 			runners = LevelRunner.createEmptyRunner();
 			writers = LevelRunner.createEmptyRunner();
 		}
-		
-		// create the nexus file, if appropriate
-		nexusScanFileManager = NexusScanFileManager.createNexusScanFile(this, model);
 		
 		// Create the manager and populate it
 		if (manager!=null) manager.dispose(); // It is allowed to configure more than once.
@@ -134,6 +146,9 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		manager.addDevices(model.getDetectors());
 		
 		setDeviceState(DeviceState.READY); // Notify 
+		
+		long after = System.currentTimeMillis();
+		setConfigureTime(after-before);
 	}
 
 
@@ -144,6 +159,8 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		
 		ScanModel model = getModel();
 		if (model.getPositionIterable()==null) throw new ScanningException("The model must contain some points to scan!");
+		
+		SubscanModerator moderator = new SubscanModerator(model.getPositionIterable(), model.getDetectors(), ServiceHolder.getGeneratorService());
 		
 		boolean errorFound = false;
 		IPosition pos = null;
@@ -156,7 +173,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 	        // Sometimes logic is needed to implement collision avoidance
 			
     		// Set the size and declare a count
-    		final int size  = getSize(model.getPositionIterable());
+    		final int size  = getSize(moderator.getOuterIterable());
     		int count = 0;
 
     		fireStart(size);    		
@@ -168,7 +185,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
     		// The scan loop
         	pos = null; // We want the last point when we are done so don't use foreach
         	boolean firedFirst = false;
-	        for (IPosition position : model.getPositionIterable()) {
+	        for (IPosition position : moderator.getOuterIterable()) {
 				
 	        	pos = position;
 	        	pos.setStepIndex(count);
@@ -221,6 +238,10 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 	private void close(boolean errorFound, IPosition last) throws ScanningException {
 		try {
 			try {
+				positioner.close();
+				runners.close();
+				writers.close();
+				
 				nexusScanFileManager.scanFinished(); // writes scanFinished and closes nexus file
 	        	
 				// We should not fire the run performed until the nexus file is closed.
@@ -283,9 +304,9 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		
 		ScanInformation info = new ScanInformation();
 		info.setSize(size);
-		info.setModel(getModel());
 		info.setRank(getScanRank(getModel().getPositionIterable()));
 		info.setScannableNames(getScannableNames(getModel().getPositionIterable()));
+		info.setFilePath(getModel().getFilePath());
 		manager.addContext(info);
 		
 		// Setup the bean to sent
@@ -443,12 +464,6 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 			lock.unlock();
 		}
 	}
-	
-	@Override
-	public boolean isVirtual() {
-		return true;
-	}
-	
 
 	private int getSize(Iterable<IPosition> gen) throws GeneratorException {
 		

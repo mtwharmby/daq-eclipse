@@ -14,6 +14,7 @@ import java.util.UUID;
 import org.eclipse.scanning.api.IModelProvider;
 import org.eclipse.scanning.api.IScanAttributeContainer;
 import org.eclipse.scanning.api.ModelValidationException;
+import org.eclipse.scanning.api.device.models.DeviceRole;
 import org.eclipse.scanning.api.device.models.IDetectorModel;
 import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.core.IPublisher;
@@ -57,7 +58,8 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	private   String                     scanId;
 	private   ScanBean                   bean;
 	private   DeviceInformation<T>       deviceInformation;
-	
+	private   DeviceRole                 role = DeviceRole.HARDWARE;
+
 	// Devices can either be the top of the scan or somewhere in the
 	// scan tree. By default they are the scan but if used in a nested
 	// scan, their primaryScanDevice will be set to false. This then 
@@ -77,10 +79,45 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	private Map<String, Object>          scanAttributes;
 	
 	private volatile boolean busy = false;
+	private boolean requireMetrics;
+	
+	/**
+	 * Since making the tree takes a while we measure its
+	 * time and make that available to clients.
+	 * It is optional if a given AbstractRunnableDevice
+	 * saves the configure time.
+	 */
+	private long configureTime;
+
 
 	protected AbstractRunnableDevice() {
 		this.scanId     = UUID.randomUUID().toString();
 		this.scanAttributes = new HashMap<>();
+		setRequireMetrics(Boolean.getBoolean(getClass().getName()+".Metrics"));
+	}
+
+	/**
+	 * Devices may be created during the cycle of a runnable device service being
+	 * made. Therefore the parameter dservice may be null. This is acceptable 
+	 * because when used in spring the service is going and then the register(...)
+	 * method may be used.
+	 * 
+	 * @param dservice
+	 */
+	protected AbstractRunnableDevice(IRunnableDeviceService dservice) {
+		this();
+		setRunnableDeviceService(dservice);
+	}
+	
+	/**
+	 * Used by spring to register the detector with the Runnable device service
+	 * *WARNING* Before calling register the detector must be given a service to 
+	 * register this. This can be done from the constructor super(IRunnableDeviceService)
+	 * of the detector to make it easy to instantiate a no-argument detector and
+	 * register it from spring.
+	 */
+	public void register() {
+		runnableDeviceService.register(this);
 	}
 
 	public ScanBean getBean() {
@@ -170,7 +207,8 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	}
 
 	
-	
+	private long lastPositionTime = -1;
+	private long total=0;
 	/**
 	 * 
 	 * @param pos
@@ -180,6 +218,16 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	 * @throws ScanningException
 	 */
 	protected void positionComplete(IPosition pos, int count, int size) throws EventException, ScanningException {
+		
+		if (requireMetrics) {
+			long currentTime = System.currentTimeMillis();
+			if (lastPositionTime>-1) {
+				long time = currentTime-lastPositionTime;
+				System.out.println("Point "+count+" timed at "+time+" ms");
+				total+=time;
+			}
+			lastPositionTime = currentTime;
+		}
 		firePositionComplete(pos);
 		
 		final ScanBean bean = getBean();
@@ -243,8 +291,15 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 		for (IPositionListener l : la) l.positionPerformed(evt);
 	}
 
+	private long startTime;
+	
 	public void fireRunWillPerform(IPosition position) throws ScanningException {
 		
+		if (isRequireMetrics()) {
+			startTime = System.currentTimeMillis();
+			total     = 0;
+		}
+
 		if (rlisteners==null) return;
 		
 		final RunEvent evt = new RunEvent(this, position, getDeviceState());
@@ -255,6 +310,14 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	}
 	
 	public void fireRunPerformed(IPosition position) throws ScanningException {
+		
+		if (isRequireMetrics()) {
+			long time = System.currentTimeMillis()-startTime;
+			System.out.println("Ran "+(position.getStepIndex()+1)+" points in *total* time of "+time+" ms.");
+			if (position.getStepIndex()>0) {
+				System.out.println("Average point time of "+(total/position.getStepIndex())+" ms/pnt");
+			}
+		}
 		
 		if (rlisteners==null) return;
 		
@@ -372,6 +435,7 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 		if (deviceInformation==null) deviceInformation = new DeviceInformation<T>();
 		deviceInformation.setModel(getModel());
 		deviceInformation.setState(getDeviceState());
+		deviceInformation.setDeviceRole(getRole());
 		deviceInformation.setStatus(getDeviceStatus());
 		deviceInformation.setBusy(isDeviceBusy());
 		deviceInformation.setAttributes(getAllAttributes());
@@ -400,6 +464,9 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	public void validate(T model) throws Exception {
 		if (model instanceof IDetectorModel) {
 			IDetectorModel dmodel = (IDetectorModel)model;
+		    if (dmodel.getName()==null || dmodel.getName().length()<1) {
+		    	throw new ModelValidationException("The name must be set!", model, "name");
+		    }
 			if (dmodel.getExposureTime()<=0) throw new ModelValidationException("The exposure time for '"+getName()+"' must be non-zero!", model, "exposureTime");
 		}
 	}
@@ -450,11 +517,11 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	}
 	
 	/**
-	 * Please override to get a value from the device
+	 * Please override to get an attribute from the device
 	 * The default returns null.
-	 * @return the value of the specified attribute
+	 * @return the specified attribute
 	 */
-	public Object getAttributeValue(String attribute) throws MalcolmDeviceException {
+	public Object getAttribute(String attribute) throws ScanningException {
 		return null;
 	}
 	
@@ -463,7 +530,33 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	 * The default returns null.
 	 * @return a list of all attributes on the device
 	 */
-	public List<MalcolmAttribute> getAllAttributes() throws MalcolmDeviceException {
+	public <A> List<A> getAllAttributes() throws ScanningException {
 		return null;
 	}
+	
+	public DeviceRole getRole() {
+		return role;
+	}
+
+	public void setRole(DeviceRole role) {
+		this.role = role;
+	}
+
+	public boolean isRequireMetrics() {
+		return requireMetrics;
+	}
+
+	public void setRequireMetrics(boolean requireMetrics) {
+		this.requireMetrics = requireMetrics;
+	}
+	public long getConfigureTime() {
+		return configureTime;
+	}
+
+	public void setConfigureTime(long configureTime) {
+		this.configureTime = configureTime;
+	}
+
+
+
 }

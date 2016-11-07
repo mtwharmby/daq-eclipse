@@ -32,7 +32,7 @@ import org.eclipse.scanning.api.IValidatorService;
 import org.eclipse.scanning.api.ModelValidationException;
 import org.eclipse.scanning.api.points.IPointGeneratorService;
 import org.eclipse.scanning.api.points.IPosition;
-import org.eclipse.scanning.api.points.models.AbstractBoundingBoxModel;
+import org.eclipse.scanning.api.points.models.IBoundingBoxModel;
 import org.eclipse.scanning.api.points.models.ScanRegion;
 import org.eclipse.scanning.device.ui.Activator;
 import org.eclipse.scanning.device.ui.ServiceHolder;
@@ -79,21 +79,21 @@ class PathInfoCalculatorJob extends Job {
 			return Status.CANCEL_STATUS;
 		}
 		
-		final IImageTrace trace = controller.getImageTrace();
-		if (trace==null) {
-			setPathVisible(false);
-			return Status.CANCEL_STATUS;
+		{ // Put trace out of scope, drawing the line should not depend on it.
+			final IImageTrace trace = controller.getImageTrace();
+			if (trace!=null) {
+				if (!trace.hasTrueAxes()) throw new IllegalArgumentException(getClass().getSimpleName()+" should act on true axis images!");
+			}
 		}
-		if (!trace.hasTrueAxes()) throw new IllegalArgumentException(getClass().getSimpleName()+" should act on true axis images!");
 		
 		monitor.beginTask("Calculating points for scan path", IProgressMonitor.UNKNOWN);
 		
 		PathInfo pathInfo = new PathInfo();
-		if (!(scanPathModel instanceof AbstractBoundingBoxModel)) {
+		if (!(scanPathModel instanceof IBoundingBoxModel)) {
 			setPathVisible(false);
 			return Status.CANCEL_STATUS;// No path to draw.
 		}
-		AbstractBoundingBoxModel boxModel = (AbstractBoundingBoxModel) scanPathModel;
+		IBoundingBoxModel boxModel = (IBoundingBoxModel) scanPathModel;
 		String xAxisName = boxModel.getFastAxisName();
 		String yAxisName = boxModel.getSlowAxisName();
 		try {

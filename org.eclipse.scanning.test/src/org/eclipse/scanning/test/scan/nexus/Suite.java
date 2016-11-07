@@ -10,13 +10,15 @@ import org.junit.runners.Suite.SuiteClasses;
 	BasicScanTest.class,
 	ConstantVelocityTest.class,
 	DarkCurrentTest.class,
+	MandelbrotAcquireTest.class,
 	MandelbrotExampleTest.class,
 	MandelbrotRemoteTest.class,
 	MonitorTest.class,
 	ScanMetadataTest.class,
 	ScanProcessingTest.class,
 	ScanPointsWriterTest.class,
-	LinearScanTest.class
+	LinearScanTest.class,
+	NexusStepScanSpeedTest.class
 
 })
 public class Suite {

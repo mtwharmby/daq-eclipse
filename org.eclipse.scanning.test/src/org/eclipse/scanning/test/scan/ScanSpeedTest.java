@@ -8,7 +8,6 @@ import java.util.List;
 
 import org.eclipse.dawnsci.analysis.api.io.ILoaderService;
 import org.eclipse.dawnsci.hdf5.nexus.NexusFileFactoryHDF5;
-import org.eclipse.dawnsci.json.MarshallerService;
 import org.eclipse.dawnsci.nexus.builder.impl.DefaultNexusBuilderFactory;
 import org.eclipse.dawnsci.remotedataset.test.mock.LoaderServiceMock;
 import org.eclipse.scanning.api.IScannable;
@@ -42,7 +41,6 @@ import org.eclipse.scanning.example.detector.MandelbrotModel;
 import org.eclipse.scanning.example.scannable.MockScannable;
 import org.eclipse.scanning.example.scannable.MockScannableConnector;
 import org.eclipse.scanning.points.PointGeneratorFactory;
-import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
 import org.eclipse.scanning.sequencer.RunnableDeviceServiceImpl;
 import org.eclipse.scanning.sequencer.ServiceHolder;
 import org.eclipse.scanning.server.servlet.Services;
@@ -70,7 +68,7 @@ public class ScanSpeedTest extends BrokerTest {
 	@Before
 	public void start() throws Exception {
 		
-		ActivemqConnectorService.setJsonMarshaller(new MarshallerService(new PointsModelMarshaller()));
+		setUpNonOSGIActivemqMarshaller();
 		eservice  = new EventServiceImpl(new ActivemqConnectorService());
 
 		// We wire things together without OSGi here 
@@ -189,8 +187,8 @@ public class ScanSpeedTest extends BrokerTest {
 			assertEquals(1,    ams.getCount(ScanStart.class));
 			assertEquals(100,  ams.getCount(PointStart.class));
 			assertEquals(100,  ams.getCount(PointEnd.class));
-			assertEquals(200,  ams.getCount(LevelStart.class)); // Detectors are called once run, once write
-			assertEquals(200,  ams.getCount(LevelEnd.class));   // Detectors are called once run, once write
+			assertEquals(100,  ams.getCount(LevelStart.class)); // run is called, but write is not as no nexus file is configured
+			assertEquals(100,  ams.getCount(LevelEnd.class));   // run is called, but write is not as no nexus file is configured
 			assertEquals(1,    ams.getCount(ScanEnd.class));
 		}
 

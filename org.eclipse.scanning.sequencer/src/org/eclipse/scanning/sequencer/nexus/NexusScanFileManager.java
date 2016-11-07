@@ -36,6 +36,7 @@ import org.eclipse.dawnsci.nexus.builder.impl.MapBasedMetadataProvider;
 import org.eclipse.scanning.api.INameable;
 import org.eclipse.scanning.api.IScannable;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
+import org.eclipse.scanning.api.device.IRunnableDevice;
 import org.eclipse.scanning.api.device.IScannableDeviceService;
 import org.eclipse.scanning.api.points.AbstractPosition;
 import org.eclipse.scanning.api.points.IDeviceDependentIterable;
@@ -55,30 +56,6 @@ import org.slf4j.LoggerFactory;
  * Builds and manages the NeXus file for a scan given a {@link ScanModel}.
  */
 public class NexusScanFileManager implements INexusScanFileManager {
-	
-	public static class DummyNexusScanFileManager implements INexusScanFileManager {
-
-		@Override
-		public void configure(ScanModel model) throws ScanningException {
-			// do nothing
-		}
-
-		@Override
-		public void createNexusFile(boolean async) throws ScanningException {
-			// do nothing
-		}
-
-		@Override
-		public void flushNexusFile() throws ScanningException {
-			// do nothing
-		}
-
-		@Override
-		public void scanFinished() throws ScanningException {
-			// do nothing
-		}
-
-	}
 	
 	private static final Logger logger = LoggerFactory.getLogger(NexusScanFileManager.class);
 
@@ -113,32 +90,7 @@ public class NexusScanFileManager implements INexusScanFileManager {
 	 */
 	private Map<String, Integer> defaultAxisIndexForScannable = null;
 	
-	/**
-	 * Creates the NeXus file for the scan, if the scan is configured to create one.
-	 * Returns an {@link INexusScanFileManager} for further interaction with the file,
-	 * e.g. flush and close()
-	 * @param runnableDevice
-	 * @param model
-	 * @return nexus scan file manager
-	 * @throws ScanningException
-	 */
-	public static INexusScanFileManager createNexusScanFile(
-			AbstractRunnableDevice<ScanModel> runnableDevice, ScanModel model) throws ScanningException {
-		final INexusScanFileManager nexusFileMgr;
-		if (model.getFilePath() == null || ServiceHolder.getFactory() == null) {
-			// nothing wired, don't write a nexus file
-			nexusFileMgr = new DummyNexusScanFileManager();
-		} else {
-			nexusFileMgr = new NexusScanFileManager(runnableDevice);
-		}
-		
-		nexusFileMgr.configure(model);
-		nexusFileMgr.createNexusFile(false);
-		
-		return nexusFileMgr;
-	}
-	 
-	private NexusScanFileManager(AbstractRunnableDevice<ScanModel> scanDevice) {
+	public NexusScanFileManager(AbstractRunnableDevice<ScanModel> scanDevice) {
 		this.scanDevice = scanDevice;
 	}
 	
@@ -232,6 +184,10 @@ public class NexusScanFileManager implements INexusScanFileManager {
 		} finally {
 			scanDevice.removePositionListener(scanPointsWriter);
 		}
+	}
+	
+	public boolean isNexusWritingEnabled() {
+		return true;
 	}
 	
 	/**
@@ -334,10 +290,10 @@ public class NexusScanFileManager implements INexusScanFileManager {
 		final Collection<String> scannableNames = firstPosition.getNames();
 		
 		Map<ScanRole, Collection<INexusDevice<?>>> nexusDevices = new EnumMap<>(ScanRole.class);
-		nexusDevices.put(ScanRole.DETECTOR, getNexusDevices(model.getDetectors()));
+		nexusDevices.put(ScanRole.DETECTOR,  getNexusDevices(model.getDetectors()));
 		nexusDevices.put(ScanRole.SCANNABLE, getNexusScannables(scannableNames));
-		nexusDevices.put(ScanRole.MONITOR, getNexusDevices(model.getMonitors()));
-		nexusDevices.put(ScanRole.METADATA, getNexusDevices(model.getMetadataScannables()));
+		nexusDevices.put(ScanRole.MONITOR,   getNexusDevices(model.getMonitors()));
+		nexusDevices.put(ScanRole.METADATA,  getNexusDevices(model.getMetadataScannables()));
 		
 		return nexusDevices;
 	}

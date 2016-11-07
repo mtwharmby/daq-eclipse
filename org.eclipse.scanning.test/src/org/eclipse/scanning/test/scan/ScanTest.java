@@ -1,12 +1,10 @@
 package org.eclipse.scanning.test.scan;
 
-import org.eclipse.dawnsci.json.MarshallerService;
 import org.eclipse.scanning.api.event.EventConstants;
 import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.event.EventServiceImpl;
 import org.eclipse.scanning.example.scannable.MockScannableConnector;
 import org.eclipse.scanning.points.PointGeneratorFactory;
-import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
 import org.eclipse.scanning.sequencer.RunnableDeviceServiceImpl;
 import org.eclipse.scanning.test.scan.mock.MockDetectorModel;
 import org.eclipse.scanning.test.scan.mock.MockWritableDetector;
@@ -22,7 +20,8 @@ public class ScanTest extends AbstractScanTest {
 	@Before
 	public void setup() throws ScanningException {
 
-		ActivemqConnectorService.setJsonMarshaller(new MarshallerService(new PointsModelMarshaller()));
+		//System.setProperty("org.eclipse.scanning.sequencer.AcquisitionDevice.Metrics", "true");
+		setUpNonOSGIActivemqMarshaller();
 		eservice  = new EventServiceImpl(new ActivemqConnectorService());
 
 		// We wire things together without OSGi here 

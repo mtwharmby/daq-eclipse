@@ -13,6 +13,7 @@ import org.eclipse.dawnsci.nexus.NexusNodeFactory;
 import org.eclipse.dawnsci.nexus.NexusScanInfo;
 import org.eclipse.dawnsci.nexus.builder.NexusObjectProvider;
 import org.eclipse.dawnsci.nexus.builder.NexusObjectWrapper;
+import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.event.core.IPublisher;
 import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.event.scan.ScanBean;
@@ -57,12 +58,14 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 	
 	private static String BUSY_ENDPOINT = "busy";
 	
-	private static String CURRENT_STEP_ENDPOINT = "currentStep";
+	private static String CURRENT_STEP_ENDPOINT = "completedSteps";
 
 
-	public MalcolmDevice(String name, IMalcolmConnectorService<MalcolmMessage> service, IPublisher<ScanBean> publisher) throws MalcolmDeviceException {
-		
-		super(service);
+	public MalcolmDevice(String name,
+			IMalcolmConnectorService<MalcolmMessage> service,
+			IRunnableDeviceService runnableDeviceService,
+			IPublisher<ScanBean> publisher) throws MalcolmDeviceException {
+		super(service, runnableDeviceService);
     	setName(name);
        	this.service   = service;
        	this.publisher = publisher;
@@ -97,28 +100,6 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 			}
 		});		
 		
-	}
-
-
-	@Override
-	public NexusObjectProvider<NXdetector> getNexusProvider(NexusScanInfo info) {
-		NXdetector detector = createNexusObject(info);
-		NexusObjectWrapper<NXdetector> prov = new NexusObjectWrapper<NXdetector>(getName(), detector);
-		// TODO Find this out from the attributes of the device?
-		prov.setExternalDatasetRank(NXdetector.NX_DATA, 4); // FIXME Malcolm1 can only to x and y scanning of a 2D detector.
-		return prov;
-	}
-
-	public NXdetector createNexusObject(NexusScanInfo info) {
-		
-		// TODO Malcolm1 hard codes where the axes and detector write to. We do the same.
-		final NXdetector detector = NexusNodeFactory.createNXdetector();
-		detector.addExternalLink(NXdetector.NX_DATA, getFileName(), "/entry/data/det1");
-		
-		for (String axis : info.getScannableNames()) {
-			detector.addExternalLink(axis+"_demand", getFileName(), "/entry/data/"+axis+"_demand");
-		}
-		return detector;
 	}
 
 
@@ -373,9 +354,8 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 
 	}
 	
-	public Object getAttributeValue(String attribute) throws MalcolmDeviceException {
-		String endpoint = attribute + ".value";
-		final MalcolmMessage message = connectionDelegate.createGetMessage(endpoint);
+	public Object getAttribute(String attribute) throws MalcolmDeviceException {
+		final MalcolmMessage message = connectionDelegate.createGetMessage(attribute);
 		final MalcolmMessage reply   = service.send(this, message);
 		if (reply.getType()==Type.ERROR) {
 			throw new MalcolmDeviceException(reply.getMessage());
@@ -405,5 +385,17 @@ class MalcolmDevice<T> extends AbstractMalcolmDevice<T> {
 		}
 		
 		return attributeList;
+	}
+	
+	/**
+	 * Gets the value of an attribute on the device
+	 */
+	public Object getAttributeValue(String attributeName) throws MalcolmDeviceException {
+		Object attribute = getAttribute(attributeName);
+		if (attribute instanceof MalcolmAttribute) {
+			MalcolmAttribute malcolmAttribute = (MalcolmAttribute)attribute;
+			return malcolmAttribute.getValue();
+		}
+		return attribute;
 	}
 }

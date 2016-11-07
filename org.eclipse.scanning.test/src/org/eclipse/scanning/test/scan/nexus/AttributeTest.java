@@ -34,6 +34,8 @@ import org.eclipse.dawnsci.nexus.NexusException;
 import org.eclipse.dawnsci.nexus.NexusFile;
 import org.eclipse.dawnsci.nexus.NexusUtils;
 import org.eclipse.january.DatasetException;
+import org.eclipse.january.dataset.Dataset;
+import org.eclipse.january.dataset.DatasetUtils;
 import org.eclipse.january.dataset.IDataset;
 import org.eclipse.january.dataset.PositionIterator;
 import org.eclipse.scanning.api.IScanAttributeContainer;
@@ -174,14 +176,14 @@ public class AttributeTest extends NexusTest{
 		nf.openToRead();
 		
 		DataNode node = nf.getData("/entry/instrument/" + sName + "/"+attrName);
-		IDataset sData = (IDataset)node.getDataset().getSlice();
-		
+		Dataset sData =  DatasetUtils.sliceAndConvertLazyDataset(node.getDataset());
+
 		if ("name".equals(attrName)) {
-			assertEquals(sData.getString(0), sName);
+			assertEquals(sData.getStringAbs(0), sName);
 		} else if (attrValue instanceof Number) {
-			assertTrue(sData.getDouble(0)==((Number)attrValue).doubleValue());
+			assertTrue(sData.getElementDoubleAbs(0)==((Number)attrValue).doubleValue());
 		} else {
-			assertEquals(sData.getString(0), (String)attrValue);
+			assertEquals(sData.getStringAbs(0), (String)attrValue);
 		}
 		
 	}
@@ -248,7 +250,7 @@ public class AttributeTest extends NexusTest{
 
 			// Append _value_demand to each name in list, then add detector axis fields to result
 			List<String> expectedAxesNames = Stream.concat(
-					scannableNames.stream().map(x -> x + "_value_demand"),
+					scannableNames.stream().map(x -> x + "_value_set"),
 					signalFieldAxes.get(sourceFieldName).stream()).collect(Collectors.toList());
 			assertAxes(nxData, expectedAxesNames.toArray(new String[expectedAxesNames.size()]));
 
@@ -264,17 +266,17 @@ public class AttributeTest extends NexusTest{
 						.getPositioner(scannableName);
 				assertNotNull(positioner);
 
-				dataNode = positioner.getDataNode("value_demand");
+				dataNode = positioner.getDataNode("value_set");
 				dataset = dataNode.getDataset().getSlice();
 				shape = dataset.getShape();
 				assertEquals(1, shape.length);
 				assertEquals(sizes[i], shape[0]);
 
-				String nxDataFieldName = scannableName + "_value_demand";
+				String nxDataFieldName = scannableName + "_value_set";
 				assertSame(dataNode, nxData.getDataNode(nxDataFieldName));
 				assertIndices(nxData, nxDataFieldName, i);
 				assertTarget(nxData, nxDataFieldName, rootNode,
-						"/entry/instrument/" + scannableName + "/value_demand");
+						"/entry/instrument/" + scannableName + "/value_set");
 
 				// Actual values should be scanD
 				dataNode = positioner.getDataNode(NXpositioner.NX_VALUE);

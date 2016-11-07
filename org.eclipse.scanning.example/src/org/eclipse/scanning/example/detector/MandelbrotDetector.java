@@ -41,6 +41,7 @@ import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.api.scan.rank.IScanRankService;
 import org.eclipse.scanning.api.scan.rank.IScanSlice;
+import org.eclipse.scanning.example.Services;
 
 /**
  * A dummy detector which must be set up with references to two Scannables representing X and Y positions. When used in a step scan, this detector generates a
@@ -69,7 +70,7 @@ public class MandelbrotDetector extends AbstractRunnableDevice<MandelbrotModel> 
 	private final Random random = new Random();
 
 	public MandelbrotDetector() throws IOException, ScanningException {
-		super();
+		super(Services.getRunnableDeviceService()); // Necessary if you are going to spring it
 		this.model = new MandelbrotModel();
 		setDeviceState(DeviceState.IDLE);
 	}
@@ -155,8 +156,12 @@ public class MandelbrotDetector extends AbstractRunnableDevice<MandelbrotModel> 
 		// Find out where we are in the scan. This is unique to the Mandelbrot
 		// detector as it's a dummy in general a detector shouldn't need to get
 		// the position in the scan
-		final double a = (Double) pos.get(model.getRealAxisName());
-		final double b = (Double) pos.get(model.getImaginaryAxisName());
+		double a = 1.0;
+		double b = 1.0;
+		if (pos.size() > 0) {
+			a = (Double) pos.get(model.getRealAxisName());
+			b = (Double) pos.get(model.getImaginaryAxisName());
+		}
 
 		// Calculate the data for the image spectrum and total
 		image = calculateJuliaSet(a, b, model.getColumns(), model.getRows());
