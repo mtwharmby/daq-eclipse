@@ -380,6 +380,8 @@ public class ScanServletPluginTest {
 		
 		// Put a connection in the DeviceServiceImpl which is used for the test
 		IMalcolmService malcolmService = new MockedMalcolmService(false);
+//		FIXME Should this be added? The comment above seems to suggest so.
+//		RunnableDeviceServiceImpl.setMalcolmService(malcolmService);
 		
 		// DO NOT COPY TESTING ONLY
 		
