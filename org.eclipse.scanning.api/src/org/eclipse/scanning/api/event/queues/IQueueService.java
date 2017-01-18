@@ -30,6 +30,13 @@ import org.eclipse.scanning.api.event.queues.beans.Queueable;
 public interface IQueueService {
 	
 	/**
+	 * Topics which will always be used to obtain information about the 
+	 * IQueueService.
+	 */
+	public static final String QUEUE_REQUEST_TOPIC = "org.eclipse.scanning.event.queues.service.request.topic";
+	public static final String QUEUE_RESPONSE_TOPIC = "org.eclipse.scanning.event.queues.service.response.topic";
+	
+	/**
 	 * Suffixes to be appended to the names of the destinations within a 
 	 * concrete instance of IQueueService
 	 */
@@ -147,7 +154,7 @@ public interface IQueueService {
 	//OK, since Queueable is a supertype of QueueBean & QueueAtom
 	@SuppressWarnings("unchecked")
 	public default <T extends Queueable> IQueue<T> getQueue(String queueID) throws EventException {//FIXME
-		if (queueID == getJobQueueID()) {
+		if (queueID.equals(getJobQueueID())) {
 			return (IQueue<T>) getJobQueue();
 		} else {
 			if (isActiveQueueRegistered(queueID)) {

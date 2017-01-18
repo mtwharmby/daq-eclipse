@@ -9,7 +9,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.eclipse.scanning.api.IScannable;
-import org.eclipse.scanning.api.annotation.AnnotationManager;
+import org.eclipse.scanning.api.annotation.scan.AnnotationManager;
 import org.eclipse.scanning.api.annotation.scan.PointEnd;
 import org.eclipse.scanning.api.annotation.scan.PointStart;
 import org.eclipse.scanning.api.annotation.scan.ScanAbort;
@@ -23,6 +23,7 @@ import org.eclipse.scanning.api.device.AbstractRunnableDevice;
 import org.eclipse.scanning.api.device.IPausableDevice;
 import org.eclipse.scanning.api.device.IRunnableDevice;
 import org.eclipse.scanning.api.device.models.DeviceRole;
+import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.event.status.Status;
@@ -30,12 +31,17 @@ import org.eclipse.scanning.api.points.GeneratorException;
 import org.eclipse.scanning.api.points.IDeviceDependentIterable;
 import org.eclipse.scanning.api.points.IPointGenerator;
 import org.eclipse.scanning.api.points.IPosition;
+import org.eclipse.scanning.api.points.models.CompoundModel;
+import org.eclipse.scanning.api.scan.PositionEvent;
 import org.eclipse.scanning.api.scan.ScanInformation;
 import org.eclipse.scanning.api.scan.ScanningException;
+import org.eclipse.scanning.api.scan.event.IPositionListener;
 import org.eclipse.scanning.api.scan.event.IPositioner;
 import org.eclipse.scanning.api.scan.models.ScanModel;
 import org.eclipse.scanning.sequencer.nexus.INexusScanFileManager;
 import org.eclipse.scanning.sequencer.nexus.NexusScanFileManagerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This device does a standard GDA scan at each point. If a given point is a 
@@ -46,10 +52,8 @@ import org.eclipse.scanning.sequencer.nexus.NexusScanFileManagerFactory;
  * scanners run.
  * 
  * @author Matthew Gerring
- *
- * @param <T>
  */
-final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
+final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> implements IPositionListener {
 	
 	// Scanning stuff
 	private IPositioner                          positioner;
@@ -59,6 +63,8 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 	
 	// the nexus file
 	private INexusScanFileManager nexusScanFileManager = null;
+	
+	private static Logger logger = LoggerFactory.getLogger(AcquisitionDevice.class);
 	
 	/*
 	 * Concurrency design recommended by Keith Ralphs after investigating
@@ -78,12 +84,19 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 	 * 
 	 */
 	private CountDownLatch latch;
+	
+	/**
+	 * Variables used to monitor progress of inner scans
+	 */
+    private int outerSize = 0;
+    private int outerCount = 0;
+    private int innerSize = 0;
 		
 	/**
 	 * Package private constructor, devices are created by the service.
 	 */
 	AcquisitionDevice() {
-		super();
+		super(ServiceHolder.getRunnableDeviceService());
 		this.lock      = new ReentrantLock();
 		this.paused    = lock.newCondition();
 		setName("solstice_scan");
@@ -114,8 +127,12 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 			// Make sure all devices report the same scan id
 			for (IRunnableDevice<?> device : model.getDetectors()) {
 				if (device instanceof AbstractRunnableDevice<?>) {
+					// TODO the same bean should not be shared between detectors
 					AbstractRunnableDevice<?> adevice = (AbstractRunnableDevice<?>)device;
-					adevice.setBean(getBean());
+					DeviceState deviceState = adevice.getDeviceState();
+					ScanBean bean = getBean();
+					bean.setDeviceState(deviceState);
+					adevice.setBean(bean);
 					adevice.setPrimaryScanDevice(false);
 				}
 			}
@@ -124,7 +141,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		// create the nexus file, if appropriate
 		nexusScanFileManager = NexusScanFileManagerFactory.createNexusScanFileManager(this);
 		nexusScanFileManager.configure(model);
-		nexusScanFileManager.createNexusFile(true);
+		nexusScanFileManager.createNexusFile(Boolean.getBoolean("org.eclipse.scanning.sequencer.nexus.async"));
 		
 		if (model.getDetectors()!=null) {
 			runners = new DeviceRunner(model.getDetectors());
@@ -143,6 +160,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		manager = new AnnotationManager(SequencerActivator.getInstance());
 		manager.addDevices(getScannables(model));
 		if (model.getMonitors()!=null) manager.addDevices(model.getMonitors());
+		if (model.getAnnotationParticipants()!=null) manager.addDevices(model.getAnnotationParticipants());
 		manager.addDevices(model.getDetectors());
 		
 		setDeviceState(DeviceState.READY); // Notify 
@@ -159,9 +177,14 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		
 		ScanModel model = getModel();
 		if (model.getPositionIterable()==null) throw new ScanningException("The model must contain some points to scan!");
+				
+		CompoundModel<?> cmodel = getBean().getScanRequest()!=null ? getBean().getScanRequest().getCompoundModel() : null;
+		SubscanModerator moderator = new SubscanModerator(model.getPositionIterable(), cmodel, model.getDetectors(), ServiceHolder.getGeneratorService());
+		manager.addContext(moderator);
 		
-		SubscanModerator moderator = new SubscanModerator(model.getPositionIterable(), model.getDetectors(), ServiceHolder.getGeneratorService());
-		
+		manager.addContext(getBean());
+		manager.addContext(model);
+	
 		boolean errorFound = false;
 		IPosition pos = null;
 		try {
@@ -173,20 +196,26 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 	        // Sometimes logic is needed to implement collision avoidance
 			
     		// Set the size and declare a count
-    		final int size  = getSize(moderator.getOuterIterable());
+    		final int size  = getEstimatedSize(moderator.getOuterIterable());
     		int count = 0;
+    		outerSize = size;
+            innerSize = getEstimatedSize(moderator.getInnerIterable());
 
     		fireStart(size);    		
 
     		// We allow monitors which can block a position until a setpoint is
     		// reached or add an extra record to the NeXus file.
     		if (model.getMonitors()!=null) positioner.setMonitors(model.getMonitors());
+    		
+    		// Add the malcolm listners so that progress on inner malcolm scans can be reported
+    		addMalcolmListeners();
 
     		// The scan loop
         	pos = null; // We want the last point when we are done so don't use foreach
         	boolean firedFirst = false;
 	        for (IPosition position : moderator.getOuterIterable()) {
-				
+	        	outerCount = count;
+                
 	        	pos = position;
 	        	pos.setStepIndex(count);
 	        	
@@ -200,7 +229,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 	        	// Check if we are paused, blocks until we are not
 	        	boolean continueRunning = checkPaused();
 	        	if (!continueRunning) return; // finally block performed 
-	        	
+
 	        	// Run to the position
         		manager.invoke(PointStart.class, pos);
 	        	positioner.setPosition(pos);   // moveTo in GDA8
@@ -210,7 +239,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
         		nexusScanFileManager.flushNexusFile(); // flush the nexus file
 	        	runners.run(pos);              // GDA8: collectData() / GDA9: run() for Malcolm
 	        	writers.run(pos, false);       // Do not block on the readout, move to the next position immediately.
-		        		        	
+	        	
 	        	// Send an event about where we are in the scan
         		manager.invoke(PointEnd.class, pos);
 	        	positionComplete(pos, count, size);
@@ -234,10 +263,49 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 			close(errorFound, pos);
 		}
 	}
-	
+
+	/**
+	 * Remove this from the list of position listeners for any Malcolm Device
+	 */
+	private void removeMalcolmListeners() {
+		try {
+			if (model.getDetectors() != null) {
+				// Make sure all devices report the same scan id
+				for (IRunnableDevice<?> device : model.getDetectors()) {
+					if (device.getRole() == DeviceRole.MALCOLM) {
+						AbstractRunnableDevice<?> ard = (AbstractRunnableDevice<?>) device;
+						ard.removePositionListener(this);
+					}
+				}
+			}
+		} catch (Exception ex) {
+			logger.error("Error removing listener", ex);
+		}
+	}
+
+	/**
+	 * Add this to the list of position listeners for any Malcolm Device
+	 * 
+	 */
+	private void addMalcolmListeners() {
+		if (model.getDetectors() != null) {
+			for (IRunnableDevice<?> device : model.getDetectors()) {
+				if (device.getRole() == DeviceRole.MALCOLM) {
+					AbstractRunnableDevice<?> ard = (AbstractRunnableDevice<?>) device;
+					ard.addPositionListener(this);
+				}
+			}
+		}
+	}
+
 	private void close(boolean errorFound, IPosition last) throws ScanningException {
 		try {
 			try {
+				try {
+					removeMalcolmListeners();
+				} catch (Exception ex) {
+					logger.warn("Error during removing Malcolm listeners", ex);
+				}
 				positioner.close();
 				runners.close();
 				writers.close();
@@ -251,7 +319,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 			} finally {
 	       	    try {
 					manager.invoke(ScanFinally.class, last);
-				} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | InstantiationException e) {
+				} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | InstantiationException | EventException e) {
 					throw new ScanningException(e);
 				}
 	       	    
@@ -276,10 +344,14 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		getBean().setMessage(ne.getMessage());
 		try {
 			manager.invoke(ScanFault.class, ne);
-		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | InstantiationException e) {
+		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | InstantiationException | EventException e) {
 			throw new ScanningException(ne);
 		}
 		setDeviceState(DeviceState.FAULT);
+		
+		if (!getBean().getStatus().isFinal()) getBean().setStatus(Status.FAILED);
+		getBean().setMessage(ne.getMessage());
+
 	}
 
 	private void fireEnd() throws ScanningException {
@@ -293,7 +365,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		// Will send the state of the scan off.
 		try {
 			manager.invoke(ScanEnd.class);
-		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | InstantiationException e) {
+		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | InstantiationException  | EventException e) {
 			throw new ScanningException(e);
 		}
    	    setDeviceState(DeviceState.READY); // Fires!
@@ -353,9 +425,10 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
     			throw new Exception("The scan state is "+getDeviceState());
     		}
        	    if (awaitPaused) {
-        		setDeviceState(DeviceState.PAUSED);
+        		if (getDeviceState() != DeviceState.PAUSED) setDeviceState(DeviceState.PAUSED);
         		manager.invoke(ScanPause.class);
         		paused.await();
+        		getBean().setStatus(Status.RESUMED);
         		setDeviceState(DeviceState.RUNNING);
         		manager.invoke(ScanResume.class);
         	}
@@ -405,17 +478,12 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 			lock.unlock();
 		}
 	}
-	
-	@Override
-	public void disable() throws ScanningException {
-		// TODO Matt Gerring to implement this: call abort on all children
-	}
 
 	@Override
 	public void pause() throws ScanningException {
 		
 		if (getDeviceState() != DeviceState.RUNNING) {
-			throw new ScanningException(this, getName()+" is not running and cannot be paused!");
+			throw new ScanningException(this, getName()+" is not running and cannot be paused! The state is "+getDeviceState());
 		}
 		try {
 			lock.lockInterruptibly();
@@ -423,12 +491,15 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 			throw new ScanningException(ne);
 		}
 		
+		getBean().setPreviousStatus(getBean().getStatus());
+		getBean().setStatus(Status.PAUSED);
 		setDeviceState(DeviceState.SEEKING);
 		try {
 			awaitPaused = true;
 			if (getModel().getDetectors()!=null) for (IRunnableDevice<?> device : getModel().getDetectors()) {
 				if (device instanceof IPausableDevice) ((IPausableDevice)device).pause();
 			}
+			setDeviceState(DeviceState.PAUSED);
 			
 		} catch (ScanningException s) {
 			throw s;
@@ -436,6 +507,13 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 			throw new ScanningException(ne);
 		} finally {
 			lock.unlock();
+		}
+	}
+	
+	@Override
+	public void seek(int stepNumber) throws ScanningException {
+		if (getModel().getDetectors()!=null) for (IRunnableDevice<?> device : getModel().getDetectors()) {
+			if (device instanceof IPausableDevice) ((IPausableDevice)device).seek(stepNumber);
 		}
 	}
 
@@ -457,6 +535,7 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 				if (device instanceof IPausableDevice) ((IPausableDevice)device).resume();
 			}
 			paused.signalAll();
+			// Notify of running is in checkPaused()
 			
 		} catch (ScanningException s) {
 			throw s;
@@ -465,7 +544,50 @@ final class AcquisitionDevice extends AbstractRunnableDevice<ScanModel> {
 		}
 	}
 
-	private int getSize(Iterable<IPosition> gen) throws GeneratorException {
+	/**
+	 * Actions to perform on a position performed event
+	 */
+	@Override
+	public void positionPerformed(PositionEvent evt) throws ScanningException {
+		IPosition position = evt.getPosition();
+		try {
+			innerPositionPercentComplete(position.getStepIndex());
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * Calculate and set the position complete value on the scan bean based on an inner position
+	 * @param innerCount The count representing the progress of of the inner scan
+	 * @throws Exception
+	 */
+	private void innerPositionPercentComplete(int innerCount) throws Exception {
+
+		if (outerSize == 0 || innerSize == 0) return;
+		
+		double innerPercentComplete = 0;
+		if (innerCount > -1) {
+			innerPercentComplete = ((double) (innerCount + 1) / innerSize);
+		}
+		double outerPercentComplete = 0;
+		if (outerCount > -1) {
+			outerPercentComplete = ((double) (outerCount) / outerSize) * 100;
+		}
+		double innerPercentOfOuter = 100 / (double) outerSize;
+		innerPercentOfOuter *= innerPercentComplete;
+		outerPercentComplete += innerPercentOfOuter;
+
+		final ScanBean bean = getBean();
+		bean.setPercentComplete(outerPercentComplete);
+		bean.setMessage("Inner Point " + innerCount + " of " + innerSize);
+		
+		if (getPublisher() != null) {
+			getPublisher().broadcast(bean);
+		}
+	}
+
+	private int getEstimatedSize(Iterable<IPosition> gen) throws GeneratorException {
 		
 		int size=0;
 		if (gen instanceof IDeviceDependentIterable) {

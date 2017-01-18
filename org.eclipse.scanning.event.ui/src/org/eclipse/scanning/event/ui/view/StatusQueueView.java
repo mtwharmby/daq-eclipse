@@ -56,7 +56,6 @@ import org.eclipse.scanning.api.event.bean.BeanEvent;
 import org.eclipse.scanning.api.event.bean.IBeanListener;
 import org.eclipse.scanning.api.event.core.ConsumerConfiguration;
 import org.eclipse.scanning.api.event.core.IPublisher;
-import org.eclipse.scanning.api.event.core.IQueueReader;
 import org.eclipse.scanning.api.event.core.ISubmitter;
 import org.eclipse.scanning.api.event.core.ISubscriber;
 import org.eclipse.scanning.api.event.queues.QueueViews;
@@ -183,7 +182,6 @@ public class StatusQueueView extends EventConnectionView {
 				updateSelected();
 			}
 		});
-
 	}
 	
 	protected void updateSelected() {
@@ -364,7 +362,7 @@ public class StatusQueueView extends EventConnectionView {
 			}
 		};
 		pauseConsumer.setImageDescriptor(Activator.getImageDescriptor("icons/control-pause-red.png"));
-		pauseConsumer.setChecked(isQueuePaused(getSubmissionQueueName()));
+		pauseConsumer.setChecked(queueConnection.isQueuePaused(getSubmissionQueueName()));
 		toolMan.add(pauseConsumer);
 		menuMan.add(pauseConsumer);
 		dropDown.add(pauseConsumer);
@@ -373,7 +371,7 @@ public class StatusQueueView extends EventConnectionView {
 		pauseMonitor.addListener(new IBeanListener<PauseBean>() {
 			@Override
 			public void beanChangePerformed(BeanEvent<PauseBean> evt) {
-				pauseConsumer.setChecked(isQueuePaused(getSubmissionQueueName()));
+				pauseConsumer.setChecked(queueConnection.isQueuePaused(getSubmissionQueueName()));
 			}
 		});
 		
@@ -482,44 +480,11 @@ public class StatusQueueView extends EventConnectionView {
 		viewer.getControl().setMenu(menuMan.createContextMenu(viewer.getControl()));
 	}
 
-	private boolean isQueuePaused(String submissionQueueName) {
-		
-		PauseBean bean = getPauseBean(submissionQueueName);
-		return bean!=null ? bean.isPause() : false;
-	}
-	
-	private PauseBean getPauseBean(String submissionQueueName) {
-		
-		IQueueReader<PauseBean>   qr=null;
-		try {
-			qr = service.createQueueReader(getUri(), EventConstants.CMD_SET);
-			qr.setBeanClass(PauseBean.class);
-		    List<PauseBean> pausedList = qr.getQueue();
-		    
-		    // The most recent bean in the queue is the latest
-		    for (PauseBean pauseBean : pausedList) {
-				if (submissionQueueName.equals(pauseBean.getQueueName())) return pauseBean;
-			}
-		    
-		} catch (Exception ne) {
-			logger.error("Cannot get queue "+EventConstants.CMD_SET, ne);
-			return null;
-			
-		} finally {
-			try {
-				if (qr!=null) qr.disconnect();
-			} catch (EventException e) {
-				logger.error("Cannot get disconnect "+EventConstants.CMD_SET, e);
-			}
-		}
-		return null;
-	}
-
 	
 	protected void togglePausedConsumer(IAction pauseConsumer) {
         
 		// The button can get out of sync if two clients are used.
-		final boolean currentState = isQueuePaused(getSubmissionQueueName());
+		final boolean currentState = queueConnection.isQueuePaused(getSubmissionQueueName());
 		try {
 			pauseConsumer.setChecked(!currentState); // We are toggling it.
 			
@@ -536,9 +501,8 @@ public class StatusQueueView extends EventConnectionView {
 			ErrorDialog.openError(getViewSite().getShell(), "Cannot pause queue "+getSubmissionQueueName(), "Cannot pause queue "+getSubmissionQueueName()+"\n\nPlease contact your support representative.",
 					new Status(IStatus.ERROR, "org.eclipse.scanning.event.ui", e.getMessage()));
 		}
-
+		pauseConsumer.setChecked(queueConnection.isQueuePaused(getSubmissionQueueName()));
 	}
-
 
 	protected void pauseJob() {
 		
@@ -725,7 +689,8 @@ public class StatusQueueView extends EventConnectionView {
 		// TODO FIXME Change to IScanBuilderService not selections so that it works with e4.
 		// We fire a special object into the selection mechanism with the data for this run.
 		// It is then up to parts to respond to this selection and update their contents.
-		selectionProvider.setSelection(new StructuredSelection(new OpenRequest(bean)));
+		// We call fireSelection as the openRequest isn't in the table. This sets the workb
+		selectionProvider.fireSelection(new StructuredSelection(new OpenRequest(bean)));
 	}
 
 	/**
@@ -908,7 +873,8 @@ public class StatusQueueView extends EventConnectionView {
 					monitor.worked(1);
 					
 					queueConnection.setBeanClass(getBeanClass());
-					List<StatusBean> runningList = queueConnection.getQueue(getQueueName(), "submissionTime"); // Submission order
+					List<StatusBean> runningList = queueConnection.getQueue(getQueueName(), null);
+					Collections.reverse(runningList); // The list comes out with the head @ 0 but we have the last submitted at 0 in our table.
 					monitor.worked(1);
 			        
 					List<StatusBean> submittedList = queueConnection.getQueue(getSubmissionQueueName(), null);

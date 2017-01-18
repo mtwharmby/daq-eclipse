@@ -2,18 +2,16 @@ package org.eclipse.scanning.event.queues;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
 
 import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.IEventService;
+import org.eclipse.scanning.api.event.core.IResponder;
 import org.eclipse.scanning.api.event.queues.IQueue;
 import org.eclipse.scanning.api.event.queues.IQueueControllerService;
 import org.eclipse.scanning.api.event.queues.IQueueService;
@@ -22,6 +20,9 @@ import org.eclipse.scanning.api.event.queues.beans.QueueAtom;
 import org.eclipse.scanning.api.event.queues.beans.QueueBean;
 import org.eclipse.scanning.api.event.queues.beans.Queueable;
 import org.eclipse.scanning.api.event.queues.beans.TaskBean;
+import org.eclipse.scanning.api.event.queues.remote.QueueRequest;
+import org.eclipse.scanning.api.ui.CommandConstants;
+import org.eclipse.scanning.event.queues.remote.QueueResponseCreator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,13 +61,17 @@ public class QueueService implements IQueueService {
 	
 	private static final Logger logger = LoggerFactory.getLogger(QueueService.class);
 	
-	private static String queueRoot, uriString, heartbeatTopicName, commandSetName, 
-		commandTopicName, jobQueueID;
-	private static URI uri;
-	private static boolean active = false, init = false, stopped = false;
-	
-	private static IQueue<QueueBean> jobQueue;
 	private static Map<String, IQueue<QueueAtom>> activeQueueRegister;
+
+	
+	private String queueRoot, heartbeatTopicName, commandSetName, commandTopicName, jobQueueID;
+	private boolean active = false, init = false, stopped = false;
+
+	private String                    uriString;
+	private URI                       uri;
+	private IQueue<QueueBean>         jobQueue;
+	private IResponder<QueueRequest>  queueResponder;
+
 	
 	private final ReentrantReadWriteLock queueControlLock = new ReentrantReadWriteLock();
 	
@@ -76,28 +81,35 @@ public class QueueService implements IQueueService {
 	
 	/**
 	 * No argument constructor for OSGi
+	 * @throws URISyntaxException 
 	 */
 	public QueueService() {
-		
+		this(getQueueRootFromProperty(), CommandConstants.getScanningBrokerUri());
 	}
 	
 	/**
-	 * Constructor for tests
+	 * Used by tests directly.
 	 */
-	public QueueService(String queueRoot, URI uri) {
-		QueueService.queueRoot = queueRoot;
-		QueueService.uri = uri;
+	public QueueService(String queueRoot, String uri) {
+		this.queueRoot = queueRoot;
+		this.uriString = uri;
+	}
+	
+	private static final String getQueueRootFromProperty() {
+		String root = System.getProperty("org.eclipse.scanning.event.queues.queue.root");
+		if (root==null) root = System.getProperty("GDA/gda.event.queues.queue.root");
+		return root;
 	}
 
-	@PostConstruct
 	@Override
 	public void init() throws EventException {
 		//Check configuration is present
 		if (queueRoot == null) throw new IllegalStateException("Queue root has not been specified");
+		
+		setUri(uriString);
 		if (uri == null) throw new IllegalStateException("URI has not been specified");
 		
-		//URI & queueRoot are already set, so we need to set their dependent fields
-		uriString = uri.toString();
+		//uriString & queueRoot are already set, so we need to set their dependent fields
 		heartbeatTopicName = queueRoot+HEARTBEAT_TOPIC_SUFFIX;
 		commandSetName = queueRoot+COMMAND_SET_SUFFIX;
 		commandTopicName = queueRoot+COMMAND_TOPIC_SUFFIX;
@@ -107,14 +119,19 @@ public class QueueService implements IQueueService {
 		jobQueue = new Queue<QueueBean>(jobQueueID, uri, 
 				heartbeatTopicName, commandSetName, commandTopicName);
 		
+		//Add responder
+		IEventService evServ = ServicesHolder.getEventService();
+		queueResponder = evServ.createResponder(uri, QUEUE_REQUEST_TOPIC, QUEUE_RESPONSE_TOPIC);
+		queueResponder.setBeanClass(QueueRequest.class);
+		queueResponder.setResponseCreator(new QueueResponseCreator());
+		
 		//Create the active-queues map
-		activeQueueRegister = new HashMap<>();
+		if (activeQueueRegister==null) activeQueueRegister = new ConcurrentHashMap<>();
 		
 		//Mark initialised
 		init = true;
 	}
 	
-	@PreDestroy
 	@Override
 	public void disposeService() throws EventException {
 		if (!init) {
@@ -124,6 +141,9 @@ public class QueueService implements IQueueService {
 		
 		//Stop the job queue if service is up
 		if (active) stop(true);
+		
+		//Shutdown the responder
+		queueResponder.disconnect();
 
 		//Dispose the job queue
 		disconnectAndClear(jobQueue);
@@ -142,7 +162,7 @@ public class QueueService implements IQueueService {
 	@Override
 	public void start() throws EventException {
 		if (!init) {
-			throw new IllegalStateException("QueueService has not been initialised.");
+			init();
 		}
 		//Check the job-queue is in a state to start
 		if (!jobQueue.getStatus().isStartable()) {
@@ -187,7 +207,7 @@ public class QueueService implements IQueueService {
 			//Kill/stop the job queuebroker
 			if (force) {
 				IQueueControllerService controller = ServicesHolder.getQueueControllerService();
-				controller.killQueue(jobQueueID, true, false);
+				controller.killQueue(jobQueueID, true, false, false);
 			} else {
 				jobQueue.stop();
 			}
@@ -354,7 +374,7 @@ public class QueueService implements IQueueService {
 				queueControlLock.writeLock().lockInterruptibly();
 				if (force) {
 					IQueueControllerService controller = ServicesHolder.getQueueControllerService();
-					controller.killQueue(queueID, true, false);
+					controller.killQueue(queueID, true, false, false);
 				}
 				//Whatever happens we need to mark the queue stopped
 				//TODO Does this need to wait for the kill call to be completed?
@@ -413,7 +433,7 @@ public class QueueService implements IQueueService {
 	@Override
 	public void setQueueRoot(String queueRoot) throws UnsupportedOperationException, EventException {
 		if (active) throw new UnsupportedOperationException("Cannot change queue root whilst queue service is running");
-		QueueService.queueRoot = queueRoot;
+		this.queueRoot = queueRoot;
 
 		if (init) {
 			//Update the destinations
@@ -455,7 +475,7 @@ public class QueueService implements IQueueService {
 	@Override
 	public void setUri(URI uri) throws UnsupportedOperationException, EventException {
 		if (active) throw new UnsupportedOperationException("Cannot change URI whilst queue service is running");
-		QueueService.uri = uri;
+		this.uri = uri;
 		uriString = uri.toString();
 
 		if (init) {

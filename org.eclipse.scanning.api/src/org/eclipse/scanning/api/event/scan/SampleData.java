@@ -1,15 +1,44 @@
 package org.eclipse.scanning.api.event.scan;
 
+import java.io.Serializable;
+
+import org.eclipse.scanning.api.annotation.ui.EditType;
 import org.eclipse.scanning.api.annotation.ui.FieldDescriptor;
 
-public class SampleData {
+public class SampleData implements Serializable{
 	
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = -1110342376693211593L;
+
 	@FieldDescriptor(label="Sample Name", hint="The name of the sample.\nMay be used in the file name written by acqusition.", fieldPosition=1, regex="[a-zA-Z0-9_]+")
 	private String name;
 	
-	@FieldDescriptor(label="Description", hint="The description of the sample.\nWill be entered in the nexus file during scanning.", fieldPosition=2)
+	@FieldDescriptor(label="Description", hint="The description of the sample.\nWill be entered in the nexus file during scanning.", fieldPosition=2, edit=EditType.LONG)
 	private String description;
+	
+	public SampleData() {
+		// no-arg constructor for spring initialization
+	}
+	
+	public SampleData(final String name, final String description) {
+		this.name = name;
+		this.description = description;
+	}
 
+	public String getName() {
+		return name;
+	}
+	public void setName(String name) {
+		this.name = name;
+	}
+	public String getDescription() {
+		return description;
+	}
+	public void setDescription(String decription) {
+		this.description = decription;
+	}
 	@Override
 	public int hashCode() {
 		final int prime = 31;
@@ -38,17 +67,5 @@ public class SampleData {
 		} else if (!name.equals(other.name))
 			return false;
 		return true;
-	}
-	public String getName() {
-		return name;
-	}
-	public void setName(String name) {
-		this.name = name;
-	}
-	public String getDescription() {
-		return description;
-	}
-	public void setDescription(String decription) {
-		this.description = decription;
 	}
 }

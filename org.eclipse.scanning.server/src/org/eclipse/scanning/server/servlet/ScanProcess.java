@@ -1,26 +1,28 @@
 package org.eclipse.scanning.server.servlet;
 
-import java.lang.reflect.InvocationTargetException;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
 import org.eclipse.scanning.api.IScannable;
-import org.eclipse.scanning.api.annotation.AnnotationManager;
+import org.eclipse.scanning.api.annotation.scan.AnnotationManager;
 import org.eclipse.scanning.api.annotation.scan.PostConfigure;
 import org.eclipse.scanning.api.annotation.scan.PreConfigure;
 import org.eclipse.scanning.api.device.AbstractRunnableDevice;
+import org.eclipse.scanning.api.device.IDeviceController;
 import org.eclipse.scanning.api.device.IPausableDevice;
 import org.eclipse.scanning.api.device.IRunnableDevice;
 import org.eclipse.scanning.api.device.IRunnableDeviceService;
-import org.eclipse.scanning.api.device.models.AbstractMalcolmModel;
+import org.eclipse.scanning.api.device.models.MalcolmModel;
 import org.eclipse.scanning.api.event.EventException;
-import org.eclipse.scanning.api.event.core.AbstractPausableProcess;
+import org.eclipse.scanning.api.event.core.IConsumerProcess;
 import org.eclipse.scanning.api.event.core.IPublisher;
 import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.event.scan.ScanRequest;
 import org.eclipse.scanning.api.event.status.Status;
+import org.eclipse.scanning.api.malcolm.IMalcolmDevice;
 import org.eclipse.scanning.api.points.GeneratorException;
 import org.eclipse.scanning.api.points.IDeviceDependentIterable;
 import org.eclipse.scanning.api.points.IPointGenerator;
@@ -47,20 +49,23 @@ import org.slf4j.LoggerFactory;
  * @author Matthew Gerring
  *
  */
-public class ScanProcess extends AbstractPausableProcess<ScanBean> {
+public class ScanProcess implements IConsumerProcess<ScanBean> {
 	
 	private static final Logger logger = LoggerFactory.getLogger(ScanProcess.class);
+	protected final ScanBean               bean;
+	protected final IPublisher<ScanBean>   publisher;
 
 	// Services
 	private IPositioner                positioner;
 	private IScriptService             scriptService;
 	
-	private IPausableDevice<ScanModel> device;
+	private IDeviceController          controller;
 	private boolean                    blocking;
 
 	public ScanProcess(ScanBean scanBean, IPublisher<ScanBean> response, boolean blocking) throws EventException {
 		
-		super(scanBean, response);
+		this.bean = scanBean;
+		this.publisher = response;
 		this.blocking = blocking;
 		
 		if (bean.getScanRequest().getStart()!=null || bean.getScanRequest().getEnd()!=null) {
@@ -79,19 +84,45 @@ public class ScanProcess extends AbstractPausableProcess<ScanBean> {
 	}
 	
 	@Override
-	public void doPause() throws Exception {
-		device.pause();
+	public void pause() throws EventException {
+		try {
+			controller.pause(getClass().getName(), null);
+		} catch (ScanningException e) {
+			throw new EventException(e);
+		}
 	}
 	
 	@Override
-	public void doResume() throws Exception  {
-		device.resume();
+	public void resume() throws EventException  {
+		try {
+			controller.resume(getClass().getName());
+		} catch (ScanningException e) {
+			throw new EventException(e);
+		}
+	}
+
+	@Override
+	public void terminate() throws EventException {
+		
+		if (bean.getStatus()==Status.COMPLETE) return; // Nothing to terminate.
+		try {
+			controller.abort(getClass().getName());
+		} catch (ScanningException e) {
+			throw new EventException(e);
+		}
 	}
 
 	@Override
 	public void execute() throws EventException {
-		
-		try {		
+		try {
+			setFilePath(bean);
+			IPointGenerator<?> gen = getGenerator(bean.getScanRequest());
+			initializeMalcolmDevice(bean, gen);
+			
+			if (!Boolean.getBoolean("org.eclipse.scanning.server.servlet.scanProcess.disableValidate")) {
+			    Services.getValidatorService().validate(bean.getScanRequest());
+			}
+
 			// Move to a position if they set one
 			if (bean.getScanRequest().getStart()!=null) {
 				positioner.setPosition(bean.getScanRequest().getStart());
@@ -101,10 +132,10 @@ public class ScanProcess extends AbstractPausableProcess<ScanBean> {
 			ScriptResponse<?> res = runScript(bean.getScanRequest().getBefore());
 			bean.getScanRequest().setBeforeResponse(res);
 			
-			this.device = createRunnableDevice(bean);
+			this.controller = createRunnableDevice(bean, gen);
 			
 			if (blocking) {
-			    device.run(null); // Runs until done
+				controller.getDevice().run(null); // Runs until done
 			    
 				// Run a script, if any has been requested
 			    res = runScript(bean.getScanRequest().getAfter());
@@ -115,7 +146,7 @@ public class ScanProcess extends AbstractPausableProcess<ScanBean> {
 				}
 
 			} else {
-				((AbstractRunnableDevice<ScanModel>)device).start(null);
+				((AbstractRunnableDevice<ScanModel>)controller.getDevice()).start(null);
 				if (bean.getScanRequest().getAfter()!=null) throw new EventException("Cannot run end script when scan is async.");
 				if (bean.getScanRequest().getEnd()!=null) throw new EventException("Cannot perform end position when scan is async.");
 			}
@@ -127,7 +158,7 @@ public class ScanProcess extends AbstractPausableProcess<ScanBean> {
 			
 	        // Intentionally do not catch EventException, that passes straight up.
 			
-		} catch (ScanningException | InterruptedException | UnsupportedLanguageException | ScriptExecutionException ne) {
+		} catch (Exception ne) {
 			ne.printStackTrace();
 			logger.error("Cannot execute run "+getBean().getName()+" "+getBean().getUniqueId(), ne);
 			bean.setPreviousStatus(Status.RUNNING);
@@ -135,8 +166,82 @@ public class ScanProcess extends AbstractPausableProcess<ScanBean> {
 			bean.setMessage(ne.getMessage());
 			broadcast(bean);
 			
+			if (ne instanceof EventException) throw (EventException)ne;
 			throw new EventException(ne);
 		}
+	}
+	
+	private void setFilePath(ScanBean bean) throws EventException {
+		ScanRequest<?> req = bean.getScanRequest();
+		
+		// Set the file path to the next scan file path from the service
+		// which manages scan names.
+		if (req.getFilePath() == null) {
+			IFilePathService fservice = Services.getFilePathService();
+			if (fservice != null) {
+				try {
+					final String template = req.getSampleData() != null ? req.getSampleData().getName() : null;
+					bean.setFilePath(fservice.getNextPath(template));
+				} catch (Exception e) {
+					throw new EventException(e);
+				}
+			} else {
+				bean.setFilePath(null); // It is allowable to run a scan without a nexus file
+			}
+		} else {
+			bean.setFilePath(req.getFilePath());
+		}
+		logger.info("Nexus file path set to {}", bean.getFilePath());
+	}
+	
+	/**
+	 * Initialise the malcolm device with the point generator and the malcolm model
+	 * with its output directory. This needs to be done before validation as these values
+	 * are sent to the actual malcolm device over the connection for validation. 
+	 * @param gen
+	 * @throws EventException
+	 * @throws ScanningException
+	 */
+	private void initializeMalcolmDevice(ScanBean bean, IPointGenerator<?> gen) throws EventException, ScanningException {
+		ScanRequest<?> req = bean.getScanRequest();
+		
+		// check for a malcolm device, if one is found, set its output dir on the model
+		// and point generator on the malcolm device itself
+		if (bean.getFilePath() == null) return;
+		
+		String malcolmDeviceName = null;
+		MalcolmModel malcolmModel = null;
+		final Map<String, Object> detectorMap = req.getDetectors();
+		if (detectorMap == null) return;
+		
+		for (String detName : detectorMap.keySet()) {
+			if (detectorMap.get(detName) instanceof MalcolmModel) {
+				malcolmDeviceName = detName;
+				malcolmModel = (MalcolmModel) detectorMap.get(detName);
+				break;
+			}
+		}
+
+		if (malcolmModel == null) return;
+		
+		// Set the malcolm output directory. This is new dir in the same parent dir as the
+		// scan file and with the same name as the scan file (minus the file extension)
+		final File scanFile = new File(bean.getFilePath());
+		final File scanDir = scanFile.getParentFile();
+		String scanFileNameNoExtn = scanFile.getName();
+		final int dotIndex = scanFileNameNoExtn.indexOf('.');
+		if (dotIndex != -1) {
+			scanFileNameNoExtn = scanFileNameNoExtn.substring(0, dotIndex);
+		}
+		final File malcolmOutputDir = new File(scanDir, scanFileNameNoExtn);
+		malcolmOutputDir.mkdir(); // create the new malcolm output directory for the scan
+		malcolmModel.setFileDir(malcolmOutputDir.toString());
+		logger.info("Set malcolm output dir to {}", malcolmOutputDir);
+		
+		// Set the point generator for the malcolm device
+		final IRunnableDeviceService service = Services.getRunnableDeviceService();
+		IRunnableDevice<?> malcolmDevice = service.getRunnableDevice(malcolmDeviceName);
+		((IMalcolmDevice<?>) malcolmDevice).setPointGenerator(gen);
 	}
 
 	private ScriptResponse<?> runScript(ScriptRequest req) throws EventException, UnsupportedLanguageException, ScriptExecutionException {
@@ -145,7 +250,7 @@ public class ScanProcess extends AbstractPausableProcess<ScanBean> {
 		return scriptService.execute(req);		
 	}
 
-	private IPausableDevice<ScanModel> createRunnableDevice(ScanBean bean) throws ScanningException, EventException {
+	private IDeviceController createRunnableDevice(ScanBean bean, IPointGenerator<?> gen) throws ScanningException, EventException {
 
 		ScanRequest<?> req = bean.getScanRequest();
 		if (req==null) throw new ScanningException("There must be a scan request to run a scan!");
@@ -157,17 +262,22 @@ public class ScanProcess extends AbstractPausableProcess<ScanBean> {
 			
 			ScanEstimator estimator = new ScanEstimator(Services.getGeneratorService(), bean.getScanRequest());
 			bean.setSize(estimator.getSize());
-
-			setFilePath(scanModel, bean);
+			scanModel.setFilePath(bean.getFilePath());
 			
-			scanModel.setDetectors(getDetectors(bean, req.getDetectors()));
+			scanModel.setDetectors(getDetectors(req.getDetectors()));
 			scanModel.setMonitors(getScannables(req.getMonitorNames()));
 			scanModel.setMetadataScannables(getScannables(req.getMetadataScannableNames()));
+			scanModel.setScanMetadata(req.getScanMetadata());
 			scanModel.setBean(bean);
 			
 			configureDetectors(req.getDetectors(), scanModel, estimator, generator);
 			
-			return (IPausableDevice<ScanModel>) Services.getRunnableDeviceService().createRunnableDevice(scanModel, publisher);
+			IPausableDevice<ScanModel> device = (IPausableDevice<ScanModel>) Services.getRunnableDeviceService().createRunnableDevice(scanModel, publisher, false);
+			IDeviceController controller = Services.getWatchdogService().create(device);
+			if (controller.getObjects()!=null) scanModel.setAnnotationParticipants(controller.getObjects());
+		    
+			device.configure(scanModel);
+		    return controller;
 			
 		} catch (Exception e) {
 			bean.setStatus(Status.FAILED);
@@ -178,7 +288,7 @@ public class ScanProcess extends AbstractPausableProcess<ScanBean> {
 		}
 	}
 
-	private void configureDetectors(Map<String, Object> dmodels, ScanModel model, ScanEstimator estimator, IPointGenerator<?> generator) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, InstantiationException, ScanningException {
+	private void configureDetectors(Map<String, Object> dmodels, ScanModel model, ScanEstimator estimator, IPointGenerator<?> generator) throws Exception {
 		
 		ScanInformation info = new ScanInformation(estimator);
 		info.setScannableNames(getScannableNames(model.getPositionIterable()));
@@ -189,11 +299,11 @@ public class ScanProcess extends AbstractPausableProcess<ScanBean> {
 			manager.addDevices(device);
 			manager.addContext(info);
 			
+			@SuppressWarnings("unchecked")
 			IRunnableDevice<Object> odevice = (IRunnableDevice<Object>)device;
 			Object dmodel = dmodels.get(odevice.getName());
-			if (dmodel instanceof AbstractMalcolmModel) {
-				AbstractMalcolmModel mmodel = (AbstractMalcolmModel)dmodel;
-				mmodel.setGenerator(generator);
+			if (odevice instanceof IMalcolmDevice<?>) {
+				((IMalcolmDevice<?>) odevice).setPointGenerator(generator);
 			}
 			manager.invoke(PreConfigure.class, dmodel);
 			odevice.configure(dmodel);
@@ -213,44 +323,12 @@ public class ScanProcess extends AbstractPausableProcess<ScanBean> {
 		return names;   		
 	}
 
-	private void setFilePath(ScanModel smodel, ScanBean bean) throws EventException, GeneratorException {
-		
-		ScanRequest<?> req = bean.getScanRequest();
-		
-		// Set the file path to the next scan file path from the service
-		// which manages scan names.
-		if (req.getFilePath()==null) {
-			IFilePathService fservice = Services.getFilePathService();
-			if (fservice!=null) {
-				try {
-					final String template = req.getSampleData()!=null ? req.getSampleData().getName() : null;
-					smodel.setFilePath(fservice.getNextPath(template));
-				} catch (Exception e) {
-					throw new EventException(e);
-				}
-			} else {
-				smodel.setFilePath(null); // It is allowable to run a scan without a nexus file.
-			}
-		} else {
-		    smodel.setFilePath(req.getFilePath());
-		}
-		bean.setFilePath(smodel.getFilePath());		
-	}
-
-	@SuppressWarnings("unchecked")
 	private IPointGenerator<?> getGenerator(ScanRequest<?> req) throws GeneratorException {
 		IPointGeneratorService service = Services.getGeneratorService();
 		return service.createCompoundGenerator(req.getCompoundModel());
 	}
-
-	@Override
-	public void doTerminate() throws Exception {
-		
-		if (bean.getStatus()==Status.COMPLETE) return; // Nothing to terminate.
-		device.abort();
-	}
 	
-	private List<IRunnableDevice<?>> getDetectors(ScanBean bean, Map<String, ?> detectors) throws EventException {
+	private List<IRunnableDevice<?>> getDetectors(Map<String, ?> detectors) throws EventException {
 		
 		if (detectors==null) return null;
 		try {
@@ -275,7 +353,7 @@ public class ScanProcess extends AbstractPausableProcess<ScanBean> {
 			throw new EventException(ne);
 		}
 	}
-
+	
 	private List<IScannable<?>> getScannables(Collection<String> scannableNames) throws EventException {
 		// used to get the monitors and the metadata scannables
 		if (scannableNames==null) return null;
@@ -292,6 +370,16 @@ public class ScanProcess extends AbstractPausableProcess<ScanBean> {
 		if (publisher!=null) {
 			publisher.broadcast(bean);
 		}		
+	}
+
+	@Override
+	public ScanBean getBean() {
+		return bean;
+	}
+
+	@Override
+	public IPublisher<ScanBean> getPublisher() {
+		return publisher;
 	}
 
 }

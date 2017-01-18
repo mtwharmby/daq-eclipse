@@ -15,7 +15,7 @@ import org.eclipse.scanning.api.points.models.GridModel;
 import org.eclipse.scanning.api.points.models.OneDEqualSpacingModel;
 import org.eclipse.scanning.api.points.models.SpiralModel;
 import org.eclipse.scanning.api.points.models.StepModel;
-import org.eclipse.scanning.points.PointGeneratorFactory;
+import org.eclipse.scanning.points.PointGeneratorService;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -31,7 +31,7 @@ public class ScanRankTest {
 	
 	@Before
 	public void before() throws Exception {
-		service = new PointGeneratorFactory();
+		service = new PointGeneratorService();
 	}
 
 	@Test
@@ -173,7 +173,7 @@ public class ScanRankTest {
 
 	private void checkOneGenerator(int nestCount, IPointGenerator<?> gen)  throws Exception {
 		
-		System.out.println("The number of points will be: "+gen.size());
+		//System.out.println("The number of points will be: "+gen.size());
 		
 		int scanRank = nestCount+1;
 		
@@ -247,7 +247,7 @@ public class ScanRankTest {
 
 		IPointGenerator<?> gen = service.createCompoundGenerator(gens);
 		
-		System.out.println("The number of points will be: "+gen.size());
+		//System.out.println("The number of points will be: "+gen.size());
 		
 		int scanRank = nestCount+2;
 		

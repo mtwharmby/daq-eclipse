@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.EventListener;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 import org.eclipse.scanning.api.INameable;
 import org.eclipse.scanning.api.event.EventException;
@@ -28,6 +29,8 @@ public class MockEventService implements IEventService {
 	private MockPublisher<?> mockPublisher;
 	private MockPublisher<? extends ConsumerCommandBean> mockCmdPub;
 	private MockSubmitter<? extends StatusBean> mockSubmitter;
+	private MockSubscriber<? extends EventListener> mockSubscriber;
+	private MockRequester<? extends IdBean> mockRequester; 
 
 	@Override
 	public <T> IQueueReader<T> createQueueReader(URI uri, String queueName) {
@@ -35,16 +38,20 @@ public class MockEventService implements IEventService {
 		return null;
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
 	public <T extends EventListener> ISubscriber<T> createSubscriber(URI uri, String topicName) {
-		return new MockSubscriber<>(uri, topicName);
+		if (mockSubscriber == null) return new MockSubscriber<>(uri, topicName);
+		return (ISubscriber<T>) mockSubscriber;
 	}
 
 	@SuppressWarnings("unchecked")
 	@Override
 	public <U> IPublisher<U> createPublisher(URI uri, String topicName) {
-		if (topicName == ServicesHolder.getQueueService().getCommandTopicName()) {
-			return (IPublisher<U>) mockCmdPub;
+		if (ServicesHolder.getQueueService() != null) {
+			if (ServicesHolder.getQueueService().getCommandTopicName().equals(topicName)) return (IPublisher<U>) mockCmdPub;
+		} else if (mockRequester != null) {
+			if (mockRequester.getQueueServiceCommandTopic().equals(topicName)) return (IPublisher<U>) mockCmdPub;
 		}
 		return (IPublisher<U>) mockPublisher;
 	}
@@ -93,15 +100,13 @@ public class MockEventService implements IEventService {
 	@Override
 	public <T extends IdBean> IRequester<T> createRequestor(URI uri, String requestTopic, String responseTopic)
 			throws EventException {
-		// TODO Auto-generated method stub
-		return null;
+		return (IRequester<T>) mockRequester;
 	}
 
 	@Override
 	public <T extends IdBean> IResponder<T> createResponder(URI uri, String requestTopic, String responseTopic)
 			throws EventException {
-		// TODO Auto-generated method stub
-		return null;
+		return new MockResponder<T>();
 	}
 
 	@Override
@@ -146,8 +151,25 @@ public class MockEventService implements IEventService {
 		this.mockSubmitter = mockSub;
 	}
 	
+	public <U extends EventListener> void setMockSubscriber(MockSubscriber<U> mockSub) {
+		this.mockSubscriber = mockSub;
+	}
+	
+	public <T extends IdBean> void setMockRequester(MockRequester<T> mockReq) {
+		this.mockRequester = mockReq;
+	}
+	
 	public Map<String, MockConsumer<? extends StatusBean>> getRegisteredConsumers() {
 		return mockConsumers;
+	}
+	
+	public MockConsumer<? extends StatusBean> getConsumerForQID(String qID) {
+		for (Map.Entry<String, MockConsumer<? extends StatusBean>> entry : mockConsumers.entrySet()) {
+			if (entry.getKey().startsWith(qID)) {
+				return entry.getValue();
+			}
+		}
+		throw new NoSuchElementException("No consumer for queueID '"+qID+"' found in MockEventService");
 	}
 	
 	public void clearRegisteredConsumers() {

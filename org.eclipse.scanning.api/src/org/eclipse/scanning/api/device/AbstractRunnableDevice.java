@@ -21,8 +21,6 @@ import org.eclipse.scanning.api.event.core.IPublisher;
 import org.eclipse.scanning.api.event.scan.DeviceInformation;
 import org.eclipse.scanning.api.event.scan.DeviceState;
 import org.eclipse.scanning.api.event.scan.ScanBean;
-import org.eclipse.scanning.api.malcolm.MalcolmDeviceException;
-import org.eclipse.scanning.api.malcolm.attributes.MalcolmAttribute;
 import org.eclipse.scanning.api.points.IPosition;
 import org.eclipse.scanning.api.scan.PositionEvent;
 import org.eclipse.scanning.api.scan.ScanningException;
@@ -89,8 +87,15 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	 */
 	private long configureTime;
 
-
-	protected AbstractRunnableDevice() {
+    /**
+     * Do not make this constructor public. In order for the device
+     * to be used with spring, the device service must be provided when
+     * the object is constructed currently. If making this constructor
+     * public please also fix the spring configuration which requires
+     * the 'register' method to be called and the service to be
+     * non-null.
+     */
+	private AbstractRunnableDevice() {
 		this.scanId     = UUID.randomUUID().toString();
 		this.scanAttributes = new HashMap<>();
 		setRequireMetrics(Boolean.getBoolean(getClass().getName()+".Metrics"));
@@ -189,6 +194,8 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 			bean.setPreviousDeviceState(bean.getDeviceState());
 			bean.setDeviceState(nstate);
 			
+			fireStateChanged(bean.getPreviousDeviceState(), nstate);
+
 			if (publisher!=null) {
 				publisher.broadcast(bean);
 			}
@@ -235,7 +242,9 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 		bean.setPosition(pos);
 		bean.setPreviousDeviceState(bean.getDeviceState());
 		if (size>-1) bean.setPercentComplete(((double)(count+1)/size)*100);
-		bean.setMessage("Point "+pos.getStepIndex()+" of "+size);
+		if (bean.getDeviceState()==DeviceState.RUNNING) { // Only set this message if we are still running.
+			bean.setMessage("Point "+pos.getStepIndex()+" of "+size);
+		}
 		if (publisher != null) {
 			publisher.broadcast(bean);
 		}
@@ -290,6 +299,19 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 		final IPositionListener[] la = posListeners.toArray(new IPositionListener[posListeners.size()]);
 		for (IPositionListener l : la) l.positionPerformed(evt);
 	}
+	
+	public void fireStateChanged(DeviceState oldState, DeviceState newState) throws ScanningException {
+		
+		if (rlisteners==null) return;
+		
+		final RunEvent evt = new RunEvent(this, null, newState);
+		evt.setOldState(oldState);
+		
+		// Make array, avoid multi-threading issues.
+		final IRunListener[] la = rlisteners.toArray(new IRunListener[rlisteners.size()]);
+		for (IRunListener l : la) l.stateChanged(evt);
+	}
+
 
 	private long startTime;
 	
@@ -380,6 +402,12 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	public void pause() throws ScanningException {
 
 	}
+	
+	@Override
+	public void seek(int stepNumber) throws ScanningException {
+       // Do nothing
+	}
+
 
 	@Override
 	public void resume() throws ScanningException {
@@ -432,7 +460,9 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	 * @throws ScanningException
 	 */
 	public final DeviceInformation<T> getDeviceInformation() throws ScanningException {
-		if (deviceInformation==null) deviceInformation = new DeviceInformation<T>();
+		if (deviceInformation==null) {
+			deviceInformation = new DeviceInformation<T>();
+		}
 		deviceInformation.setModel(getModel());
 		deviceInformation.setState(getDeviceState());
 		deviceInformation.setDeviceRole(getRole());
@@ -458,7 +488,7 @@ public abstract class AbstractRunnableDevice<T> implements IRunnableEventDevice<
 	}
 	
 	/**
-	 * If ovrriding don't forget the old super.validate(...)
+	 * If overriding don't forget the old super.validate(...)
 	 */
 	@Override
 	public void validate(T model) throws Exception {

@@ -2,7 +2,7 @@ package org.eclipse.scanning.server.servlet;
 
 import java.lang.reflect.InvocationTargetException;
 
-import org.eclipse.scanning.api.annotation.AnnotationManager;
+import org.eclipse.scanning.api.annotation.scan.AnnotationManager;
 import org.eclipse.scanning.api.annotation.scan.PostConfigure;
 import org.eclipse.scanning.api.annotation.scan.PreConfigure;
 import org.eclipse.scanning.api.device.IRunnableDevice;
@@ -99,7 +99,7 @@ public class AcquireRequestHandler implements IResponseProcess<AcquireRequest> {
 	}
 	
 	@SuppressWarnings("unchecked")
-	private void configureDetector(IRunnableDevice<?> detector, Object detectorModel) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, InstantiationException, ScanningException {
+	private void configureDetector(IRunnableDevice<?> detector, Object detectorModel) throws Exception {
 		AnnotationManager manager = new AnnotationManager(Activator.createResolver());
 		manager.addDevices(detector);
 		

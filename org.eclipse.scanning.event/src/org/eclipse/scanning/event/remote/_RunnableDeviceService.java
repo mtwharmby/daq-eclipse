@@ -77,6 +77,11 @@ public class _RunnableDeviceService extends AbstractRemoteService implements IRu
 	public <T> IRunnableDevice<T> createRunnableDevice(T model, IPublisher<ScanBean> publisher) throws ScanningException {
 		throw new ScanningException("Not possible to set custom publishers on "+getClass().getSimpleName()+" because it is remote!");
 	}
+	
+	@Override
+	public <T> IRunnableDevice<T> createRunnableDevice(T model, IPublisher<ScanBean> publisher, boolean configure) throws ScanningException {
+		throw new ScanningException("Not possible to set custom publishers on "+getClass().getSimpleName()+" because it is remote!");
+	}
 
 	@Override
 	public <T> IRunnableDevice<T> getRunnableDevice(String name) throws ScanningException {
@@ -119,6 +124,7 @@ public class _RunnableDeviceService extends AbstractRemoteService implements IRu
 	    DeviceRequest req;
 		try {
 			req = requester.post(new DeviceRequest());
+			req.checkException();
 		} catch (EventException | InterruptedException e) {
 			throw new ScanningException("Cannot get devices! Connection to broker may be lost or no server up!", e);
 		}

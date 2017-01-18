@@ -87,7 +87,6 @@ public class AbstractScanTest extends BrokerTest {
 		pos.addPositionListener(new IPositionListener() {
 			@Override
 			public void levelPerformed(PositionEvent evt) {
-				System.out.println("Level complete "+evt.getLevel());
 				for (INameable s : evt.getLevelObjects()) scannablesMoved.add(s.getName());
 			}
 		});
@@ -131,7 +130,6 @@ public class AbstractScanTest extends BrokerTest {
 		positioner.addPositionListener(new IPositionListener() {
 			@Override
 			public void levelPerformed(PositionEvent evt) {
-				System.out.println("Level complete "+evt.getLevel());
 				for (ILevel s : evt.getLevelObjects()) {
 					levelsMoved.add(String.valueOf(s.getLevel()));
 				}
@@ -346,9 +344,9 @@ public class AbstractScanTest extends BrokerTest {
 			@Override
 			public void scanEventPerformed(ScanEvent evt) {
 				events.add(evt.getBean());
-				System.out.println("State : "+evt.getBean().getDeviceState());
-				System.out.println("Percent complete : "+evt.getBean().getPercentComplete());
-				System.out.println(evt.getBean().getPosition());
+//				System.out.println("State : "+evt.getBean().getDeviceState());
+//				System.out.println("Percent complete : "+evt.getBean().getPercentComplete());
+//				System.out.println(evt.getBean().getPosition());
 			}
 		});
 		
@@ -500,9 +498,9 @@ public class AbstractScanTest extends BrokerTest {
 		IRunnableDevice<ScanModel> scanner = dservice.createRunnableDevice(smodel);
 		scanner.run(null);
 
-		// Check that using IDeviceDependentIterable, five means five.
+		// Check that using IDeviceDependentIterable, five means ten. (ten because it's used before to calculate the size of the scan)
 		assertTrue("The iterator should be asked "+iterable.size()+" times for position and is was asked "+iterable.getTotalPositions(),
-				    iterable.getTotalPositions()==iterable.size());
+				    iterable.getTotalPositions()==iterable.size()*2);
 	}
 
 	private class PausingIterable implements Iterable<IPosition>, IDeviceDependentIterable {

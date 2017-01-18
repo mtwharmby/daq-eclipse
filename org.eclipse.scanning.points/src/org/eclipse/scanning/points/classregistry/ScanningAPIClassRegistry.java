@@ -6,6 +6,7 @@ import java.util.Map;
 
 import org.eclipse.dawnsci.analysis.api.persistence.IClassRegistry;
 import org.eclipse.scanning.api.device.models.ClusterProcessingModel;
+import org.eclipse.scanning.api.device.models.MalcolmModel;
 import org.eclipse.scanning.api.device.models.ProcessingModel;
 import org.eclipse.scanning.api.event.alive.HeartbeatBean;
 import org.eclipse.scanning.api.event.alive.KillBean;
@@ -23,19 +24,28 @@ import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.event.scan.ScanEvent;
 import org.eclipse.scanning.api.event.scan.ScanRequest;
 import org.eclipse.scanning.api.event.status.AdministratorMessage;
-import org.eclipse.scanning.api.event.status.Status;
 import org.eclipse.scanning.api.event.status.StatusBean;
+import org.eclipse.scanning.api.malcolm.MalcolmTable;
+import org.eclipse.scanning.api.malcolm.attributes.BooleanArrayAttribute;
+import org.eclipse.scanning.api.malcolm.attributes.BooleanAttribute;
+import org.eclipse.scanning.api.malcolm.attributes.ChoiceAttribute;
+import org.eclipse.scanning.api.malcolm.attributes.MalcolmAttribute;
+import org.eclipse.scanning.api.malcolm.attributes.NumberArrayAttribute;
+import org.eclipse.scanning.api.malcolm.attributes.NumberAttribute;
+import org.eclipse.scanning.api.malcolm.attributes.PointGeneratorAttribute;
+import org.eclipse.scanning.api.malcolm.attributes.StringArrayAttribute;
+import org.eclipse.scanning.api.malcolm.attributes.StringAttribute;
+import org.eclipse.scanning.api.malcolm.attributes.TableAttribute;
 import org.eclipse.scanning.api.malcolm.event.MalcolmEventBean;
-import org.eclipse.scanning.api.points.StaticPosition;
 import org.eclipse.scanning.api.points.MapPosition;
 import org.eclipse.scanning.api.points.Point;
 import org.eclipse.scanning.api.points.Scalar;
+import org.eclipse.scanning.api.points.StaticPosition;
 import org.eclipse.scanning.api.points.models.ArrayModel;
 import org.eclipse.scanning.api.points.models.BoundingBox;
 import org.eclipse.scanning.api.points.models.BoundingLine;
 import org.eclipse.scanning.api.points.models.CollatedStepModel;
 import org.eclipse.scanning.api.points.models.CompoundModel;
-import org.eclipse.scanning.api.points.models.StaticModel;
 import org.eclipse.scanning.api.points.models.GridModel;
 import org.eclipse.scanning.api.points.models.LissajousModel;
 import org.eclipse.scanning.api.points.models.OneDEqualSpacingModel;
@@ -45,10 +55,12 @@ import org.eclipse.scanning.api.points.models.RasterModel;
 import org.eclipse.scanning.api.points.models.ScanRegion;
 import org.eclipse.scanning.api.points.models.SinglePointModel;
 import org.eclipse.scanning.api.points.models.SpiralModel;
+import org.eclipse.scanning.api.points.models.StaticModel;
 import org.eclipse.scanning.api.points.models.StepModel;
 import org.eclipse.scanning.api.scan.AxisConfiguration;
 import org.eclipse.scanning.api.scan.PositionEvent;
 import org.eclipse.scanning.api.scan.event.Location;
+import org.eclipse.scanning.api.scan.models.ScanMetadata;
 import org.eclipse.scanning.api.scan.ui.ControlEnumNode;
 import org.eclipse.scanning.api.scan.ui.ControlFileNode;
 import org.eclipse.scanning.api.scan.ui.ControlGroup;
@@ -81,6 +93,7 @@ public class ScanningAPIClassRegistry implements IClassRegistry {
 		registerClass(tmp, ScanEvent.class);
 		registerClass(tmp, SampleData.class);
 		registerClass(tmp, ScanRequest.class);
+		registerClass(tmp, ScanMetadata.class);
 		
 		// points
 		registerClass(tmp, StaticPosition.class);
@@ -120,7 +133,6 @@ public class ScanningAPIClassRegistry implements IClassRegistry {
 		registerClass(tmp, PauseBean.class);
 		
 		// event.status
-		registerClass(tmp, Status.class);
 		registerClass(tmp, AdministratorMessage.class);
 		registerClass(tmp, StatusBean.class);
 		
@@ -132,7 +144,20 @@ public class ScanningAPIClassRegistry implements IClassRegistry {
 		registerClass(tmp, TaskBean.class);
 		
 		// malcolm.event
+		registerClass(tmp, MalcolmModel.class);
+		registerClass(tmp, Float.class);
 		registerClass(tmp, MalcolmEventBean.class);
+		registerClass(tmp, MalcolmTable.class);
+		registerClass(tmp, ChoiceAttribute.class);
+		registerClass(tmp, BooleanArrayAttribute.class);
+		registerClass(tmp, BooleanAttribute.class);
+		registerClass(tmp, MalcolmAttribute.class);
+		registerClass(tmp, NumberArrayAttribute.class);
+		registerClass(tmp, NumberAttribute.class);
+		registerClass(tmp, PointGeneratorAttribute.class);
+		registerClass(tmp, StringArrayAttribute.class);
+		registerClass(tmp, StringAttribute.class);
+		registerClass(tmp, TableAttribute.class);
 
 		// api.scan
 		registerClass(tmp, PositionEvent.class);

@@ -38,7 +38,7 @@ import org.eclipse.scanning.event.EventServiceImpl;
 import org.eclipse.scanning.example.detector.MandelbrotDetector;
 import org.eclipse.scanning.example.detector.MandelbrotModel;
 import org.eclipse.scanning.example.scannable.MockScannableConnector;
-import org.eclipse.scanning.points.PointGeneratorFactory;
+import org.eclipse.scanning.points.PointGeneratorService;
 import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
 import org.eclipse.scanning.sequencer.RunnableDeviceServiceImpl;
 import org.eclipse.scanning.sequencer.ServiceHolder;
@@ -92,7 +92,7 @@ public class BenchmarkScanTest extends BrokerTest {
 		impl._register(MockWritingMandlebrotModel.class, MockWritingMandelbrotDetector.class);
 		impl._register(MandelbrotModel.class, MandelbrotDetector.class);
 
-		gservice  = new PointGeneratorFactory();
+		gservice  = new PointGeneratorService();
 		lservice  = new LoaderServiceMock();
 		
 		// Provide lots of services that OSGi would normally.
@@ -213,7 +213,7 @@ public class BenchmarkScanTest extends BrokerTest {
 		subscriber.addListener(new IScanListener() {		
 			@Override
 			public void scanStateChanged(ScanEvent evt) {
-				System.out.println("State Change : "+evt.getBean().getDeviceState());
+//				System.out.println("State Change : "+evt.getBean().getDeviceState());
 				states.add(evt.getBean().getDeviceState());
 			}
 			@Override
