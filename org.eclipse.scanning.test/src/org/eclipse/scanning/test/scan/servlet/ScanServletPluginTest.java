@@ -44,7 +44,8 @@ import org.junit.Test;
 
 public class ScanServletPluginTest {
 
-	private static ScanServlet servlet; 
+	private static ScanServlet servlet;
+	protected static boolean unitTest = true;
 	
 	@BeforeClass
 	public static void connect()  throws Exception {
@@ -379,6 +380,9 @@ public class ScanServletPluginTest {
 		Services.setConnector(dservice);
 		
 		// DO NOT COPY TESTING ONLY
+		if (unitTest) {
+			
+		}
 		
 		// We double check that the services injected into the servlet bundle are there.
 		assertNotNull(Services.getConnector());
