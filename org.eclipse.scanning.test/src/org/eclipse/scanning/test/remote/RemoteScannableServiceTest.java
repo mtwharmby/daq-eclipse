@@ -1,6 +1,7 @@
 package org.eclipse.scanning.test.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
@@ -78,7 +79,6 @@ public class RemoteScannableServiceTest extends BrokerTest {
 	@Before
 	public void createService() throws EventException {
 		rservice = eservice.createRemoteService(uri, IScannableDeviceService.class);
-		System.out.println("Made remote service "+rservice+" ... "+rservice.getClass());
 	}
 	
 	@After
@@ -95,7 +95,7 @@ public class RemoteScannableServiceTest extends BrokerTest {
 
 	@Test
 	public void checkNotNull() throws Exception {
-		assertTrue(rservice!=null);
+		assertNotNull(rservice);
 	}
 	
 	@Test
@@ -141,9 +141,9 @@ public class RemoteScannableServiceTest extends BrokerTest {
 		
 		for (int i = 0; i < 10; i++) {
 			setter.setPosition(i*10d);
-			System.out.println("Set "+setter.getName()+" to value "+(i*10d)+" It's value is "+setter.getPosition());
+//			System.out.println("Set "+setter.getName()+" to value "+(i*10d)+" It's value is "+setter.getPosition());
 			assertTrue(getter.getPosition()==(i*10d));
-			System.out.println("The value of "+setter.getName()+" was also "+getter.getPosition());
+//			System.out.println("The value of "+setter.getName()+" was also "+getter.getPosition());
 		}
 	}
 	
@@ -165,7 +165,7 @@ public class RemoteScannableServiceTest extends BrokerTest {
 		((IPositionListenable)temp).addPositionListener(new IPositionListener() {
 			public void positionChanged(PositionEvent evt) throws ScanningException {
 				double val = (Double)evt.getPosition().get("T");
-				System.out.println("The value of T was at "+val);
+//				System.out.println("The value of T was at "+val);
 				positions.add(val);
 			}
 		});

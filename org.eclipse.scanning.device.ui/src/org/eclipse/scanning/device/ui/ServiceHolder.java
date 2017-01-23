@@ -1,5 +1,7 @@
 package org.eclipse.scanning.device.ui;
 
+import java.net.URI;
+
 import org.eclipse.dawnsci.analysis.api.expressions.IExpressionService;
 import org.eclipse.dawnsci.analysis.api.io.ILoaderService;
 import org.eclipse.dawnsci.analysis.api.io.IRemoteDatasetService;
@@ -11,6 +13,8 @@ import org.eclipse.scanning.api.event.IEventConnectorService;
 import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.points.IPointGeneratorService;
 import org.eclipse.scanning.api.scan.IParserService;
+import org.eclipse.scanning.api.stashing.IStashingService;
+import org.eclipse.scanning.api.ui.CommandConstants;
 import org.eclipse.scanning.api.ui.auto.IInterfaceService;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceReference;
@@ -30,6 +34,7 @@ public class ServiceHolder {
 	private static IRemoteDatasetService  remoteDatasetService;
 	private static IParserService         parserService;
 	private static IInterfaceService      interfaceService;
+	private static IStashingService       stashingService;
 	private static EventAdmin             eventAdmin;
 	
 	private static BundleContext context;
@@ -48,7 +53,7 @@ public class ServiceHolder {
 		return eventService;
 	}
 
-	public void setEventService(IEventService eventService) {
+	public static void setEventService(IEventService eventService) {
 		ServiceHolder.eventService = eventService;
 	}
 
@@ -92,6 +97,10 @@ public class ServiceHolder {
 			return null;
 		}
 	}
+	
+	public static <T> T getRemote(Class<T> clazz) throws Exception {
+		return (T)ServiceHolder.getEventService().createRemoteService(new URI(CommandConstants.getScanningBrokerUri()), clazz);
+	}
 
 	public static IValidatorService getValidatorService() {
 		if (validatorService==null) validatorService = getService(IValidatorService.class);
@@ -107,7 +116,7 @@ public class ServiceHolder {
 		return springParser;
 	}
 
-	public void setSpringParser(ISpringParser springParser) {
+	public static void setSpringParser(ISpringParser springParser) {
 		ServiceHolder.springParser = springParser;
 	}
 
@@ -163,5 +172,14 @@ public class ServiceHolder {
 
 	public static void setInterfaceService(IInterfaceService interfaceService) {
 		ServiceHolder.interfaceService = interfaceService;
+	}
+
+	public static IStashingService getStashingService() {
+		if (stashingService==null) stashingService = getService(IStashingService.class);
+		return stashingService;
+	}
+
+	public static void setStashingService(IStashingService stashingService) {
+		ServiceHolder.stashingService = stashingService;
 	}
 }

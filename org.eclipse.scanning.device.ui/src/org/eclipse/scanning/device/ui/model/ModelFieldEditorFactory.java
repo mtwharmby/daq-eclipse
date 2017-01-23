@@ -1,7 +1,6 @@
 package org.eclipse.scanning.device.ui.model;
 
 import java.lang.reflect.InvocationTargetException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -31,6 +30,7 @@ import org.eclipse.jface.window.ToolTip;
 import org.eclipse.richbeans.widgets.cell.CComboCellEditor;
 import org.eclipse.richbeans.widgets.cell.CComboWithEntryCellEditor;
 import org.eclipse.richbeans.widgets.cell.CComboWithEntryCellEditorData;
+import org.eclipse.richbeans.widgets.cell.LongStringCellEditor;
 import org.eclipse.richbeans.widgets.cell.NumberCellEditor;
 import org.eclipse.richbeans.widgets.decorator.RegexDecorator;
 import org.eclipse.richbeans.widgets.file.FileDialogCellEditor;
@@ -46,7 +46,6 @@ import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IScannableDeviceService;
 import org.eclipse.scanning.api.event.scan.DeviceInformation;
 import org.eclipse.scanning.api.scan.ScanningException;
-import org.eclipse.scanning.api.ui.CommandConstants;
 import org.eclipse.scanning.device.ui.ServiceHolder;
 import org.eclipse.scanning.device.ui.util.PageUtil;
 import org.eclipse.scanning.device.ui.util.SortNatural;
@@ -79,17 +78,11 @@ public class ModelFieldEditorFactory {
 	private ColumnLabelProvider labelProvider;
 	
 	public ModelFieldEditorFactory() {
-		cservice = getService(IScannableDeviceService.class);
-		dservice = getService(IRunnableDeviceService.class);
-
-	}
-	
-	private <T> T getService(Class<T> clazz) {
 		try {
-			return (T)ServiceHolder.getEventService().createRemoteService(new URI(CommandConstants.getScanningBrokerUri()), clazz);
+			cservice = ServiceHolder.getRemote(IScannableDeviceService.class);
+			dservice = ServiceHolder.getRemote(IRunnableDeviceService.class);
 		} catch (Exception e) {
-			logger.error("Unable to make a remote connection to "+clazz.getSimpleName());
-			return null;
+			logger.error("Cannot get remote services!", e);
 		}
 	}
 	
@@ -145,7 +138,7 @@ public class ModelFieldEditorFactory {
         	ed = getNumberEditor(field, clazz, parent);
         	
         } else if (IROI.class.isAssignableFrom(clazz)) { 
-        	throw new IllegalArgumentException("Have not ported RegionCellEditor to DAQ Eclipse yet!");
+        	throw new IllegalArgumentException("Have not ported RegionCellEditor to daq-eclipse yet!");
         	// TODO FIXME Need way of editing regions.
         	//ed = new RegionCellEditor(parent);
         	
@@ -169,19 +162,11 @@ public class ModelFieldEditorFactory {
         } else if (String.class.equals(clazz) && anot!=null && anot.dataset() != null &&!anot.dataset().isEmpty()) {
         	ed = getDatasetEditor(field, parent);
         	
-        } else if (String.class.equals(clazz)) {
-        	ed = new TextCellEditor(parent) {
-        	    @Override
-        		protected void doSetValue(Object value) {
-        	    	String string = value!=null ? value.toString() : "";
-        	    	super.doSetValue(string);
-        	    }
-        	};
-        	if (anot!=null && anot.regex().length()>0) {
-        	    Text text = (Text)ed.getControl();
-        	    RegexDecorator deco = new RegexDecorator(text, anot.regex());
-        	    deco.setAllowInvalidValues(false);
-        	}
+        } else if (String.class.equals(clazz) && anot!=null && anot.edit()==EditType.LONG) {
+        	ed = getLongTextEditor(parent, anot);
+        	
+        }else if (String.class.equals(clazz)) {
+        	ed = getSimpleTextEditor(parent, anot);
         }
         
         // Show the tooltip, if there is one
@@ -198,6 +183,26 @@ public class ModelFieldEditorFactory {
 
 	}
 	
+	private CellEditor getLongTextEditor(Composite parent, FieldDescriptor anot) {
+		return new LongStringCellEditor(parent, labelProvider);
+	}
+
+	private CellEditor getSimpleTextEditor(Composite parent, FieldDescriptor anot) {
+		TextCellEditor ed = new TextCellEditor(parent) {
+    	    @Override
+    		protected void doSetValue(Object value) {
+    	    	String string = value!=null ? value.toString() : "";
+    	    	super.doSetValue(string);
+    	    }
+    	};
+    	if (anot!=null && anot.regex().length()>0) {
+    	    Text text = (Text)ed.getControl();
+    	    RegexDecorator deco = new RegexDecorator(text, anot.regex());
+    	    deco.setAllowInvalidValues(false);
+    	}
+    	return ed;
+    }
+
 	public CellEditor getDeviceEditor(DeviceType deviceType, Composite parent) throws ScanningException {
         
 		final List<String> items;
@@ -464,6 +469,10 @@ public class ModelFieldEditorFactory {
 		job.schedule();
 			
 		return ed;
+	}
+
+	public IScannableDeviceService getScannableDeviceService() {
+		return cservice;
 	}
 
 }

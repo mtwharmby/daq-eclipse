@@ -49,23 +49,28 @@ public class MockScannableConnector implements IScannableDeviceService, IDisconn
 	 */
 	private void createMockObjects() {
 		System.out.println("Starting up Mock IScannableDeviceService");
-		this.positionPublisher = positionPublisher;
 		
 		if (cache==null) cache = new HashMap<String, INameable>(3);
 		register(new MockPausingMonitor("pauser", 10d,  -1));
 		register(new MockTopupScannable("topup", 1000));
-		register(new MockScannable("beamcurrent", 5d,  1, "V"));
-		register(new MockStringScannable("portshutter", "Open"));
+		register(new MockScannable("beamcurrent", 5d,  1, "mA"));
+		register(new MockStringScannable("portshutter", "Open", new String[]{"Open", "Closed", "Error"}));
 		
 		register(new MockScannable("period", 1000d, 1, "ms"));
 		register(new MockBeamOnMonitor("beamon", 10d, 1));
 		register(new MockScannable("bpos",  0.001,  -1));
-		register(new MockScannable("a", 10d, 1, "mm"));
+		
+		MockScannable a = new MockScannable("a", 10d, 1, "mm");
+		a.setActivated(true);
+		register(a);
 		register(new MockScannable("b", 10d, 1, "mm"));
 		register(new MockScannable("c", 10d, 1, "mm"));
-		register(new MockScannable("p", 10d, 2, "Âµm"));
-		register(new MockScannable("q", 10d, 2, "Âµm"));
-		register(new MockScannable("r", 10d, 2, "Âµm"));
+		
+		MockScannable p = new MockScannable("p", 10d, 2, "µm");
+		p.setActivated(true);
+		register(p);
+		register(new MockScannable("q", 10d, 2, "µm"));
+		register(new MockScannable("r", 10d, 2, "µm"));
 		
 		MockScannable x = new MockNeXusScannable("x", 0d,  3, "mm");
 		x.setRealisticMove(true);
@@ -99,11 +104,16 @@ public class MockScannableConnector implements IScannableDeviceService, IDisconn
 		
 		MockNeXusScannable temp= new MockNeXusScannable("T", 295,  3, "K");
 		temp.setRealisticMove(true);
-		
 		String srate = System.getProperty("org.eclipse.scanning.example.temperatureRate");
 		if (srate==null) srate = "10.0";
 		temp.setMoveRate(Double.valueOf(srate)); // K/s much faster than real but device used in tests.
 		register(temp);
+		
+		temp= new MockNeXusScannable("temp", 295,  3, "K");
+		temp.setRealisticMove(false);
+		temp.setRequireSleep(false);
+		register(temp);
+	
 		for (int i = 0; i < 10; i++) {
 			MockScannable t = new MockScannable("T"+i, 0d,  0, "K");
 			t.setRequireSleep(false);
@@ -114,7 +124,9 @@ public class MockScannableConnector implements IScannableDeviceService, IDisconn
 			register(new MockNeXusScannable("neXusScannable"+i, 0d,  3));
 	    }
 		for (int i = 0; i < 10; i++) {
-			register(new MockNeXusScannable("monitor"+i, 0d,  3));
+			MockNeXusScannable mon = new MockNeXusScannable("monitor"+i, 0d,  3);
+			mon.setActivated(i%3==0);
+			register(mon);
 	    }
 		for (int i = 0; i < 10; i++) {
 			MockNeXusScannable metadataScannable = new MockNeXusScannable("metadataScannable"+i, 0d, 3);

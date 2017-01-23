@@ -9,6 +9,7 @@
 package org.eclipse.scanning.event.ui.view;
 
 import java.io.File;
+import java.math.RoundingMode;
 import java.net.URI;
 import java.text.DateFormat;
 import java.text.NumberFormat;
@@ -873,7 +874,8 @@ public class StatusQueueView extends EventConnectionView {
 					monitor.worked(1);
 					
 					queueConnection.setBeanClass(getBeanClass());
-					List<StatusBean> runningList = queueConnection.getQueue(getQueueName(), "submissionTime"); // Submission order
+					List<StatusBean> runningList = queueConnection.getQueue(getQueueName(), null);
+					Collections.reverse(runningList); // The list comes out with the head @ 0 but we have the last submitted at 0 in our table.
 					monitor.worked(1);
 			        
 					List<StatusBean> submittedList = queueConnection.getQueue(getSubmissionQueueName(), null);
@@ -959,14 +961,17 @@ public class StatusQueueView extends EventConnectionView {
 				return ((StatusBean)element).getStatus().toString();
 			}
 		});
-
+		
 		final TableViewerColumn pc = new TableViewerColumn(viewer, SWT.CENTER);
 		pc.getColumn().setText("Complete");
 		pc.getColumn().setWidth(70);
+		final NumberFormat percentFormat = NumberFormat.getPercentInstance();
+		percentFormat.setRoundingMode(RoundingMode.DOWN);
 		pc.setLabelProvider(new ColumnLabelProvider() {
 			public String getText(Object element) {
 				try {
-				    return NumberFormat.getPercentInstance().format(((StatusBean)element).getPercentComplete()/100d);
+				    String text = percentFormat.format(((StatusBean)element).getPercentComplete()/100d);
+				    return text;
 				} catch (Exception ne) {
 					return "-";
 				}

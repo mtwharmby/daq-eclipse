@@ -26,10 +26,8 @@ import org.eclipse.scanning.test.event.queues.mocks.MockEventService;
 import org.eclipse.scanning.test.event.queues.mocks.MockPublisher;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
-@Ignore("TODO Fails on travis wit: QueueResponseProcessTest.setUp:65 » UnsupportedOperation Cannot change queue r...")
 public class QueueResponseProcessTest {
 	
 	private DummyBean submDummy, statDummy;
@@ -248,7 +246,7 @@ public class QueueResponseProcessTest {
 
 		//Get the job-queue & compare it's config
 		IQueue<QueueBean> jobQueue = qServ.getJobQueue();
-		IQueue<? extends Queueable> remoteJobQueue = qAns.getQueue();
+		IQueue<? extends Queueable> remoteJobQueue = qControl.getQueue(qAns.getQueueID());
 		
 		assertEquals("CommandSetName different", jobQueue.getCommandSetName(), remoteJobQueue.getCommandSetName());
 		assertEquals("CommandTopicName different", jobQueue.getCommandTopicName(), remoteJobQueue.getCommandTopicName());

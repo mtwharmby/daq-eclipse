@@ -119,14 +119,13 @@ class ModelViewer<T> implements IModelViewer<T>, ISelectionListener, ISelectionP
 	private IRunnableDeviceService dservice;
 
 	
-	public ModelViewer() {
+	ModelViewer() {
 		super();
 	}
 		
-	public ModelViewer(IViewSite site) {
-		this();
-		if (site != null) site.getPage().addSelectionListener(this);
-		this.site = site;
+	public <V> void setViewSite(V site) {
+		this.site = (IViewSite)site;
+		if (site != null) this.site.getPage().addSelectionListener(this);
 	}
 	
 
@@ -407,13 +406,17 @@ class ModelViewer<T> implements IModelViewer<T>, ISelectionListener, ISelectionP
 			if (ob instanceof IScanPathModel) setModel((T)ob);
 			
 			if (ob instanceof IROI && getModel() instanceof IBoundingBoxModel) {
-                BoundingBox box = ScanRegions.createBoxFromPlot(model);
-	    		((IBoundingBoxModel)getModel()).setBoundingBox(box);
-	    		refresh();
+				try {
+	                BoundingBox box = ScanRegions.createBoxFromPlot(model);
+		    		((IBoundingBoxModel)getModel()).setBoundingBox(box);
+		    		refresh();
+				} catch (Exception ne) {
+					logger.info("Unable to process box from plot!", ne);
+				}
 			}
 			
 		} catch (Exception ne) {
-			logger.error("Cannot set model for object "+ob);
+			logger.error("Cannot set model for object "+ob, ne);
 			if (site != null) site.getActionBars().getStatusLineManager().setErrorMessage("Cannot connect to server "+ne.getMessage());
 		}
 	}
@@ -510,6 +513,12 @@ class ModelViewer<T> implements IModelViewer<T>, ISelectionListener, ISelectionP
 
 	public void setValidationError(boolean validationError) {
 		this.validationError = validationError;
+	}
+
+	@Override
+	public void applyEditorValue() {
+		if (!viewer.isCellEditorActive()) return;
+		viewer.applyEditorValue();
 	}
 
 }

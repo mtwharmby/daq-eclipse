@@ -3,6 +3,7 @@ package org.eclipse.scanning.event.remote;
 import java.net.URI;
 import java.util.List;
 
+import org.eclipse.scanning.api.ValidationException;
 import org.eclipse.scanning.api.annotation.ui.DeviceType;
 import org.eclipse.scanning.api.device.IActivatable;
 import org.eclipse.scanning.api.device.IRunnableDevice;
@@ -71,9 +72,15 @@ class _RunnableDevice<M> extends _AbstractRemoteDevice<M> implements IRunnableDe
 	}
 
 	@Override
-	public void validate(M model) throws Exception {
-		DeviceRequest res = requester.post(new DeviceRequest(info.getName(), DeviceAction.VALIDATE, model));
-		res.checkException();
+	public void validate(M model) throws ValidationException {
+		try {
+			DeviceRequest res = requester.post(new DeviceRequest(info.getName(), DeviceAction.VALIDATE, model));
+			res.checkException();
+		} catch (ValidationException ve) {
+			throw ve;
+		} catch (Exception ne) {
+            throw new ValidationException(ne);
+		}
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -121,15 +128,6 @@ class _RunnableDevice<M> extends _AbstractRemoteDevice<M> implements IRunnableDe
 	@Override
 	public void disable() throws ScanningException {
 		method(new DeviceRequest(info.getName(), DeviceAction.DISABLE));
-	}
-
-	private void method(DeviceRequest deviceRequest) throws ScanningException {
-		try {
-			DeviceRequest req = requester.post(deviceRequest);
-			merge((DeviceInformation<M>)req.getDeviceInformation());
-		} catch (Exception ne) {
-			throw new ScanningException(ne);
-		}
 	}
 
 	public boolean isActivated() {

@@ -2,7 +2,6 @@ package org.eclipse.scanning.device.ui.points;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.text.DecimalFormat;
 import java.text.Format;
 import java.text.SimpleDateFormat;
@@ -30,13 +29,14 @@ import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.viewers.StyledString;
 import org.eclipse.jface.viewers.StyledString.Styler;
+import org.eclipse.scanning.api.IScannable;
 import org.eclipse.scanning.api.IValidatorService;
 import org.eclipse.scanning.api.ModelValidationException;
 import org.eclipse.scanning.api.annotation.ui.FieldValue;
 import org.eclipse.scanning.api.device.IRunnableDevice;
 import org.eclipse.scanning.api.device.IRunnableDeviceService;
+import org.eclipse.scanning.api.device.IScannableDeviceService;
 import org.eclipse.scanning.api.event.EventConstants;
-import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.core.ISubmitter;
 import org.eclipse.scanning.api.event.scan.DeviceInformation;
 import org.eclipse.scanning.api.event.scan.SampleData;
@@ -53,6 +53,7 @@ import org.eclipse.scanning.api.scan.ScanEstimator;
 import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.api.scan.ui.AbstractControl;
 import org.eclipse.scanning.api.script.ScriptRequest;
+import org.eclipse.scanning.api.stashing.IStashing;
 import org.eclipse.scanning.api.ui.CommandConstants;
 import org.eclipse.scanning.api.ui.auto.IModelDialog;
 import org.eclipse.scanning.api.ui.auto.InterfaceInvalidException;
@@ -61,7 +62,6 @@ import org.eclipse.scanning.device.ui.DevicePreferenceConstants;
 import org.eclipse.scanning.device.ui.ScanningPerspective;
 import org.eclipse.scanning.device.ui.ServiceHolder;
 import org.eclipse.scanning.device.ui.util.PageUtil;
-import org.eclipse.scanning.device.ui.util.Stashing;
 import org.eclipse.scanning.device.ui.util.ViewUtil;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
@@ -108,9 +108,10 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 	private Label      timeEstimate;
 
 	// Services
-	private IPointGeneratorService pservice; // Used to create a compound generator
-	private IValidatorService      vservice; // Used to validate a selection
-	private IRunnableDeviceService dservice;
+	private IPointGeneratorService  pservice; // Used to create a compound generator
+	private IValidatorService       vservice; // Used to validate a selection
+	private IRunnableDeviceService  dservice;
+	private IScannableDeviceService cservice;
 
 	// Job
 	private Job updateJob;
@@ -126,8 +127,10 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 		this.pservice = ServiceHolder.getGeneratorService();
 		this.vservice = ServiceHolder.getValidatorService();
 		try {
-			this.dservice = ServiceHolder.getEventService().createRemoteService(new URI(CommandConstants.getScanningBrokerUri()), IRunnableDeviceService.class);
-		} catch (EventException  | URISyntaxException e) {
+			this.dservice = ServiceHolder.getRemote(IRunnableDeviceService.class);
+			this.cservice = ServiceHolder.getRemote(IScannableDeviceService.class);
+
+		} catch (Exception e) {
 			logger.error("Unable to get remote device service!", e);
 		}
 		updateJob = new Job("Update Scna Information") {
@@ -140,16 +143,22 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 		updateJob.setSystem(true);
 		updateJob.setPriority(Job.INTERACTIVE);
 		
-		final Stashing stash = new Stashing("org.eclipse.scanning.device.ui.scan.execute.sample.json", ServiceHolder.getEventService().getEventConnectorService());
+		final IStashing stash = ServiceHolder.getStashingService().createStash("org.eclipse.scanning.device.ui.scan.execute.sample.json");
 		sampleData = new SampleData();
-		if (stash.isStashed()) sampleData = stash.unstash(SampleData.class);
+		if (stash.isStashed()) {
+			try {
+				sampleData = stash.unstash(SampleData.class);
+			} catch (Exception e) {
+				logger.error("Cannot unstash sample data!", e);
+			}
+		}
 	}
 	
 	@Override
     public void saveState(IMemento memento) {
 		super.saveState(memento);
 		try {
-			final Stashing stash = new Stashing("org.eclipse.scanning.device.ui.scan.execute.sample.json", ServiceHolder.getEventService().getEventConnectorService());
+			final IStashing stash = ServiceHolder.getStashingService().createStash("org.eclipse.scanning.device.ui.scan.execute.sample.json");
 			stash.stash(sampleData);
 		} catch (Exception ne) {
 			logger.error("Cannot save sample information!", ne);
@@ -167,7 +176,7 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 		Composite container = new Composite(parent, SWT.NONE);
 		container.setLayout(new GridLayout(1, false));
 		
-		this.text = new StyledText(container, SWT.NONE);
+		this.text = new StyledText(container, SWT.MULTI | SWT.H_SCROLL);
 		text.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true));
 		text.setBackground(text.getDisplay().getSystemColor(SWT.COLOR_WHITE));
 		text.getParent().layout(new Control[]{text});
@@ -176,16 +185,16 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 		run.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, false));
 		run.setLayout(new GridLayout(3, false));
 		
-		final Button execute = new Button(run, SWT.PUSH);
-		execute.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false));
-		execute.setText("Submit");
-		execute.setToolTipText("Execute current scan\n(Submits it to the queue of scans to be run.)");
-		execute.addSelectionListener(new SelectionAdapter() {
+		submitButton = new Button(run, SWT.PUSH);
+		submitButton.setLayoutData(new GridData(SWT.LEFT, SWT.CENTER, false, false));
+		submitButton.setText("Submit");
+		submitButton.setToolTipText("Execute current scan\n(Submits it to the queue of scans to be run.)");
+		submitButton.addSelectionListener(new SelectionAdapter() {
 			public void widgetSelected(SelectionEvent e) {
 				submit();
 			}
 		});
-		execute.setImage(Activator.getImageDescriptor("icons/shoe--arrow.png").createImage());
+		submitButton.setImage(Activator.getImageDescriptor("icons/shoe--arrow.png").createImage());
 
 		timeEstimate = new Label(run, SWT.NONE);
 		timeEstimate.setText("                    ");
@@ -324,10 +333,13 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 		}
 		if (modelAdaptable==null) return null; // Nothing to update, no view gives us a CompoundModel!
 
+		// We see if there is a view with a compound model adaptable
+		// TODO Replace with IScanBuilderService to make e4 compatible
+
 		ScanRequest<IROI> ret = new ScanRequest<IROI>();
 		CompoundModel<IROI> cm = modelAdaptable.getAdapter(CompoundModel.class);
 		ret.setCompoundModel(cm);
-
+		
 		IPosition[] pos = modelAdaptable.getAdapter(IPosition[].class);
 		ret.setStart(pos[0]);
 		ret.setEnd(pos[1]);
@@ -336,6 +348,7 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 		ret.setBefore(req[0]);
 		ret.setAfter(req[1]);
 
+		ret.setMonitorNames(getMonitors());
 		ret.setDetectors(getDetectors());
 		ret.setSampleData(sampleData);
         vservice.validate(ret);
@@ -350,6 +363,8 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 	}
 	
 	private IAdaptable modelAdaptable;
+	private IAction    submitAction;
+	private Button     submitButton;
 	
 	@Override
 	public void selectionChanged(IWorkbenchPart part, ISelection selection) {
@@ -372,6 +387,7 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 		if (ob instanceof GeneratorDescriptor) return true; // Generator changed.
 		if (ob instanceof FieldValue)          return true; // Model changed.
 		if (ob instanceof DeviceInformation)   return true; // Device changed.
+		if (ob instanceof IScannable<?>)       return true; // Device changed.
 		if (ob instanceof ScanRegion)          return true; // Region changed.
 		if (ob instanceof IROI)                return true; // Region changed.
 		if (ob instanceof AbstractControl)     return true; // Position changed.
@@ -400,6 +416,7 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 	        if (cm != null) {
 	        	// Validate
 	        	vservice.validate(cm);
+				setThreadSafeEnabled(true);
 	        	
 	    		StyledString styledString = new StyledString();
 		        	
@@ -450,6 +467,10 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 		        	styledString.append(getScanRegions(cm.getRegions()), StyledString.QUALIFIER_STYLER);
 		        	
 					if (monitor.isCanceled()) return;
+		        	styledString.append("\nMonitors: ");
+		        	styledString.append(getMonitorNames(), StyledString.DECORATIONS_STYLER);
+
+					if (monitor.isCanceled()) return;
 		        	if (sampleData!=null && sampleData.getName()!=null && sampleData.getName().length()>0) {
 			        	styledString.append("\nSample: ");
 			        	styledString.append(sampleData.getName(), StyledString.QUALIFIER_STYLER);
@@ -485,9 +506,11 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 	        	setThreadSafeLabel(timeEstimate, timeString);
  	        }
 		} catch (ModelValidationException ne) {
+			setThreadSafeEnabled(false);
 			setThreadSafeText(text, ne.getMessage());
 			 
 		} catch (Exception ne) {
+			setThreadSafeEnabled(false);
 			logger.error("Cannot create summary of scan!", ne);
 			if (ne.getMessage()!=null) {
 				setThreadSafeText(text, ne.getMessage());
@@ -495,6 +518,13 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 				setThreadSafeText(text, ne.toString());
 			}
 		}
+	}
+
+	private void setThreadSafeEnabled(boolean enabled) {
+		submitButton.getDisplay().syncExec(()->{
+			this.submitAction.setEnabled(enabled);
+			this.submitButton.setEnabled(enabled);
+		});
 	}
 
 	private String getModelNames(CompoundModel<IROI> compound) {
@@ -550,13 +580,14 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 
 	private String getDetectorNames() throws Exception {
 		
-		final StringBuilder buf = new StringBuilder();
 		Collection<DeviceInformation<?>> infos = getDeviceInformation();
 		Collection<DeviceInformation<?>> activated = new ArrayList<>();
     	for (Iterator<DeviceInformation<?>> it = infos.iterator(); it.hasNext();) {
 			DeviceInformation<?> deviceInformation = it.next();
 			if (deviceInformation.isActivated()) activated.add(deviceInformation);
     	}
+    	
+		final StringBuilder buf = new StringBuilder();
     	for (Iterator<DeviceInformation<?>> it = activated.iterator(); it.hasNext();) {
     		DeviceInformation<?> info = it.next();
     		IRunnableDevice<Object> device = dservice.getRunnableDevice(info.getName());
@@ -585,6 +616,31 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
     	}
 
     	return detectors;
+	}
+
+	private List<String> getMonitors() throws Exception {
+		
+		final Collection<DeviceInformation<?>> scannables = cservice.getDeviceInformation();
+		final List<String> ret = new ArrayList<String>();
+		for (DeviceInformation<?> info : scannables) {
+			if (info.isActivated()) ret.add(info.getName());
+		}
+		return ret;
+	}
+	
+	private String getMonitorNames() throws Exception {
+		
+		List<String> mons = getMonitors();
+		if (mons==null || mons.isEmpty()) return "None";
+		
+		final StringBuilder buf = new StringBuilder();
+    	for (Iterator<String> it = mons.iterator(); it.hasNext();) {
+    		String name = it.next();
+    		buf.append(name);
+    		if(it.hasNext()) buf.append(",");
+    		buf.append(" ");
+    	}
+        return buf.toString();
 	}
 
 
@@ -632,7 +688,7 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 	
 		ViewUtil.addGroups("show", mans, showInfo, showCmd, showTime);
 		
-		IAction run = new Action("Execute current scan\n(Submits it to the queue of scans to be run.)", Activator.getImageDescriptor("icons/shoe--arrow.png")) {
+		this.submitAction = new Action("Submit current scan\n(Submits it to the queue of scans to be run.)", Activator.getImageDescriptor("icons/shoe--arrow.png")) {
 			public void run() {
 				submit();
 			}
@@ -653,7 +709,7 @@ public class ExecuteView extends ViewPart implements ISelectionListener {
 			}
 		};
 	
-		ViewUtil.addGroups("execute", mans, run);
+		ViewUtil.addGroups("execute", mans, submitAction);
 		ViewUtil.addGroups("auxilary", mans, copy, sample, showQueue);
 
 		

@@ -58,4 +58,17 @@ public interface IModelViewer<T> {
 	 * Make the viewer take focus to its main control.
 	 */
 	void setFocus();
+
+    /**
+     * Call to apply the cell editor value in the editing bean.
+     */
+	void applyEditorValue();
+	
+	/**
+	 * If this viewer is linked to an e3 part with an IViewSite,
+	 * it may be provided here.
+	 * 
+	 * @param site
+	 */
+	<V> void setViewSite(V site);
 }

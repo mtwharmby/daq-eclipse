@@ -274,10 +274,10 @@ public class NexusScanFileManager implements INexusScanFileManager {
 		return names;
 	}
 	
-	private NexusScanInfo createScanInfo(ScanModel scanModel, List<String> scannableNames) {
+	private NexusScanInfo createScanInfo(ScanModel scanModel, List<String> scannableNames) throws ScanningException {
 		final NexusScanInfo scanInfo = new NexusScanInfo(scannableNames);
 
-		final int scanRank = getScanRank(model.getPositionIterable());
+		final int scanRank = getScanRank(scanModel);
 		scanInfo.setRank(scanRank);
 		
 		scanInfo.setDetectorNames(getDeviceNames(scanModel.getDetectors()));
@@ -287,13 +287,17 @@ public class NexusScanFileManager implements INexusScanFileManager {
 		return scanInfo;
 	}
 	
-	private int getScanRank(Iterable<IPosition> gen) {
+	protected int getScanRank(ScanModel model) throws ScanningException {
+		return getScanRank(model.getPositionIterable());
+	}
+	
+	protected int getScanRank(Iterable<IPosition> gen) {
 		int scanRank = -1;
 		if (gen instanceof IDeviceDependentIterable) {
 			scanRank = ((IDeviceDependentIterable)gen).getScanRank();
 		}
 		if (scanRank < 0) {
-			scanRank = model.getPositionIterable().iterator().next().getScanRank();
+			scanRank = gen.iterator().next().getScanRank();
 		}
 		if (scanRank < 0) {
 			scanRank = 1;
@@ -336,6 +340,7 @@ public class NexusScanFileManager implements INexusScanFileManager {
 		for (ScanRole deviceType : EnumSet.allOf(ScanRole.class)) {
 			addDevicesToEntry(entryBuilder, deviceType);
 		}
+		entryBuilder.add(scanPointsWriter.getNexusProvider(scanInfo));
 		
 		// create the NXdata groups
 		createNexusDataGroups(entryBuilder);
@@ -343,7 +348,6 @@ public class NexusScanFileManager implements INexusScanFileManager {
 	
 	private void addDevicesToEntry(NexusEntryBuilder entryBuilder, ScanRole deviceType) throws NexusException {
 		entryBuilder.addAll(nexusObjectProviders.get(deviceType));
-		entryBuilder.add(scanPointsWriter.getNexusProvider(scanInfo));
 		
 		List<CustomNexusEntryModification> customModifications =
 				nexusDevices.get(deviceType).stream().

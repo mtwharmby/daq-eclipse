@@ -3,12 +3,14 @@ package org.eclipse.scanning.event.remote;
 import java.net.URI;
 import java.util.concurrent.TimeUnit;
 
+import org.eclipse.scanning.api.ValidationException;
 import org.eclipse.scanning.api.event.EventConstants;
 import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.event.core.IRequester;
 import org.eclipse.scanning.api.event.scan.DeviceInformation;
 import org.eclipse.scanning.api.event.scan.DeviceRequest;
+import org.eclipse.scanning.api.scan.ScanningException;
 
 abstract class _AbstractRemoteDevice<M> extends AbstractRemoteService {
 
@@ -36,7 +38,7 @@ abstract class _AbstractRemoteDevice<M> extends AbstractRemoteService {
 	    connect(req);
 	}
 	
-	private void connect(DeviceRequest req) throws EventException, InterruptedException {
+	private void connect(DeviceRequest req) throws EventException, InterruptedException, ValidationException {
 		req = requester.post(req);
 		req.checkException();
 		info = (DeviceInformation<M>)req.getDeviceInformation();
@@ -79,4 +81,14 @@ abstract class _AbstractRemoteDevice<M> extends AbstractRemoteService {
 		}
 		this.info.merge(info);       
 	}
+	
+	protected void method(DeviceRequest deviceRequest) throws ScanningException {
+		try {
+			DeviceRequest req = requester.post(deviceRequest);
+			merge((DeviceInformation<M>)req.getDeviceInformation());
+		} catch (Exception ne) {
+			throw new ScanningException(ne);
+		}
+	}
+
 }

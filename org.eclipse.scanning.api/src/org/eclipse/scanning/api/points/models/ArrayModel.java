@@ -10,8 +10,17 @@ import java.util.Arrays;
  *
  */
 public class ArrayModel extends AbstractPointsModel implements IScanPathModel {
+	
 
 	private double[] positions;
+
+	public ArrayModel() {
+		
+	}
+	
+	public ArrayModel(double... positions) {
+		this.positions = positions;
+	}
 
 	public double[] getPositions() {
 		return positions;
@@ -41,4 +50,10 @@ public class ArrayModel extends AbstractPointsModel implements IScanPathModel {
 			return false;
 		return true;
 	}
+
+	@Override
+	public String toString() {
+		return "ArrayModel [positions=" + Arrays.toString(positions) + "]";
+	}
+	
 }

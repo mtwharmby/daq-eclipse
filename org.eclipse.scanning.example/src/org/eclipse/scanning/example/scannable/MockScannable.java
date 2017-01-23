@@ -138,7 +138,7 @@ public class MockScannable extends AbstractScannable<Number> implements IConfigu
 		boolean ok = delegate.firePositionWillPerform(new Scalar(getName(), index, val));
 		if (!ok) return;
 		
-		if (value!=null) {
+		if (value!=null && position!=null) {
 			long waitTime = Math.abs(Math.round((val-this.position.doubleValue()))*100);
 			waitTime = Math.max(waitTime, 1);
 
@@ -209,7 +209,7 @@ public class MockScannable extends AbstractScannable<Number> implements IConfigu
 					delegate.firePositionChanged(getLevel(), new Scalar(getName(), index, currentPosition));
 					if (terminate==TerminationPreference.CONTROLLED) break;
 				}
-				System.out.println("Realistic move of "+getName()+" from "+orig+" to "+currentPosition+" complete");
+				//System.out.println("Realistic move of "+getName()+" from "+orig+" to "+currentPosition+" complete");
 			}
 			if (isRequireSleep() && minimumWaitTime>0 && minimumWaitTime>waitedTime && terminate!=TerminationPreference.PANIC) {
 				Thread.sleep(minimumWaitTime-waitedTime);
