@@ -16,12 +16,18 @@ import java.util.concurrent.TimeUnit;
 
 import org.eclipse.dawnsci.analysis.api.roi.IROI;
 import org.eclipse.dawnsci.json.MarshallerService;
+import org.eclipse.scanning.api.IValidatorService;
+import org.eclipse.scanning.api.device.IDeviceWatchdog;
+import org.eclipse.scanning.api.device.IDeviceWatchdogService;
+import org.eclipse.scanning.api.device.IRunnableDevice;
 import org.eclipse.scanning.api.device.IRunnableDeviceService;
 import org.eclipse.scanning.api.device.IScannableDeviceService;
+import org.eclipse.scanning.api.device.IWritableDetector;
 import org.eclipse.scanning.api.event.EventException;
 import org.eclipse.scanning.api.event.IEventService;
 import org.eclipse.scanning.api.event.core.ISubmitter;
 import org.eclipse.scanning.api.event.core.ISubscriber;
+import org.eclipse.scanning.api.event.scan.DeviceInformation;
 import org.eclipse.scanning.api.event.scan.IScanListener;
 import org.eclipse.scanning.api.event.scan.ScanBean;
 import org.eclipse.scanning.api.event.scan.ScanEvent;
@@ -34,18 +40,24 @@ import org.eclipse.scanning.api.points.models.CompoundModel;
 import org.eclipse.scanning.api.points.models.GridModel;
 import org.eclipse.scanning.api.points.models.IScanPathModel;
 import org.eclipse.scanning.api.points.models.StepModel;
+import org.eclipse.scanning.api.scan.ScanningException;
 import org.eclipse.scanning.event.EventServiceImpl;
+import org.eclipse.scanning.example.detector.MandelbrotDetector;
 import org.eclipse.scanning.example.detector.MandelbrotModel;
 import org.eclipse.scanning.example.scannable.MockScannableConnector;
 import org.eclipse.scanning.points.PointGeneratorService;
 import org.eclipse.scanning.points.serialization.PointsModelMarshaller;
+import org.eclipse.scanning.points.validation.ValidatorService;
 import org.eclipse.scanning.sequencer.RunnableDeviceServiceImpl;
+import org.eclipse.scanning.sequencer.watchdog.DeviceWatchdogService;
 import org.eclipse.scanning.server.servlet.ScanServlet;
 import org.eclipse.scanning.server.servlet.Services;
 import org.eclipse.scanning.test.BrokerTest;
 import org.eclipse.scanning.test.malcolm.device.MockedMalcolmService;
 import org.eclipse.scanning.test.scan.mock.MockDetectorModel;
+import org.eclipse.scanning.test.scan.mock.MockWritableDetector;
 import org.junit.AfterClass;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -92,8 +104,13 @@ public class ScanServletTest extends BrokerTest {
 		servlet.disconnect();
 	}
 	
+//	@Before
+//	public void setUp() {
+//		System.setProperty("run.in.eclipse", "true");	
+//	}
+	
 	/**
-	 * This test mimiks a client submitting a scan. The client may submit any status bean
+	 * This test mimics a client submitting a scan. The client may submit any status bean
 	 * to the consumer of course and then  
 	 * 
 	 * @throws Exception
@@ -409,8 +426,21 @@ public class ScanServletTest extends BrokerTest {
 			
 			//Set IRunnableDeviceService
 			IRunnableDeviceService devServ = new RunnableDeviceServiceImpl(dservice);
-			//FIXME Register stuff?
+			//Register stuff - FIXME is this right?
+			registerMockDet(devServ);
+			registerMandyDet(devServ);
 			Services.setRunnableDeviceService(devServ);
+			
+			//Set IValidatorService
+			IValidatorService valServ = new ValidatorService();
+			((ValidatorService)valServ).setEventService(eservice);
+			((ValidatorService)valServ).setPointGeneratorService(gservice);
+			((ValidatorService)valServ).setRunnableDeviceService(devServ);
+			Services.setValidatorService(valServ);
+			
+			//Set IDeviceWatchdogService
+			IDeviceWatchdogService doggy = new DeviceWatchdogService();
+			Services.setWatchdogService(doggy);
 		}
 		
 		// We double check that the services injected into the servlet bundle are there.
@@ -419,6 +449,41 @@ public class ScanServletTest extends BrokerTest {
 		assertNotNull(Services.getGeneratorService());
 		assertNotNull(Services.getMalcService());
 		assertNotNull(Services.getRunnableDeviceService());
+	}
+	
+	private static void registerMockDet(IRunnableDeviceService dservice) throws Exception {
+		final MockDetectorModel dmodel = new MockDetectorModel();
+		dmodel.setName("detector");
+		
+		MockWritableDetector det = new MockWritableDetector();
+		det.setModel(dmodel);
+		det.setName("detector");
+		
+		DeviceInformation<MockDetectorModel> info = new DeviceInformation<>("detector");
+		info.setId("org.eclipse.scanning.example.mockDetectorInfo");
+		info.setLabel("Mock Detector");
+		info.setDescription("A Test Detector (detects Mocks)");
+		det.setDeviceInformation(info);
+		
+		dservice.register(det);
+	}
+	
+	private static void registerMandyDet(IRunnableDeviceService dservice) throws Exception {		
+		//Lifted from: RunnableDeviceServiceConfigureTest.registerFive()
+		final MandelbrotModel model = new MandelbrotModel("x", "y");
+		model.setName("mandelbrot");
+		
+		final MandelbrotDetector det = new MandelbrotDetector();
+		det.setModel(model);
+		det.setName("mandelbrot");
+		
+		DeviceInformation<MandelbrotModel> info = new DeviceInformation<>("mandelbrot");
+		info.setId("org.eclipse.scanning.example.mandelbrotDetectorInfo");
+		info.setLabel("Mandelbrot Detector ");
+		info.setDescription("A Test Detector");
+		det.setDeviceInformation(info);
+		
+		dservice.register(det);
 	}
 
 }
