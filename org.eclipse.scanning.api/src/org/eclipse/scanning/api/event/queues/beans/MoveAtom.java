@@ -32,6 +32,19 @@ public class MoveAtom extends QueueAtom {
 	}
 	
 	/**
+	 * Basic constructor, allowing MoveAtom to be named. Positioner parameters 
+	 * need to be added later by the user.
+	 * 
+	 * @param mvName String automatically/user supplied name for this move.
+	 */
+	public MoveAtom(String mvName) {
+		super();
+		setName(mvName);
+		
+		positionConfig = new LinkedHashMap<String, Object>();
+	}
+	
+	/**
 	 * Constructor with required arguments to configure one motor position.
 	 * 
 	 * @param mvName String automatically/user supplied name for this move. 
@@ -40,10 +53,9 @@ public class MoveAtom extends QueueAtom {
 	 * @param runTime long Duration of this move in ms.
 
 	 */
-	public MoveAtom(String mvName, String moveDev, Object tgt, long runTime) {
+	public MoveAtom(String mvName, String moveDev, Object tgt) {
 		super();
 		setName(mvName);
-		this.runTime = runTime;
 		
 		positionConfig = new LinkedHashMap<String, Object>();
 		positionConfig.put(moveDev, tgt);
@@ -56,10 +68,9 @@ public class MoveAtom extends QueueAtom {
 	 * @param config Map of form String motor name Object target position
 	 * @param runTime
 	 */
-	public MoveAtom(String mvName, Map<String, Object> config, long runTime) {
+	public MoveAtom(String mvName, Map<String, Object> config) {
 		super();
 		setName(mvName);
-		this.runTime = runTime;
 		positionConfig = config;
 	}
 	
@@ -68,7 +79,7 @@ public class MoveAtom extends QueueAtom {
 	 * 
 	 * @return List of String names of the motors in the configuration.
 	 */
-	public List<String> getMotorNames() {
+	public List<String> getPositionerNames() {
 		return new ArrayList<String>(positionConfig.keySet());
 	}
 	
@@ -78,7 +89,7 @@ public class MoveAtom extends QueueAtom {
 	 * @param moveDev String name of motor to move.
 	 * @return Object representing the target move position.
 	 */
-	public Object get(String moveDev) {
+	public Object getPositioner(String moveDev) {
 		return positionConfig.get(moveDev);
 	}
 	
@@ -88,7 +99,7 @@ public class MoveAtom extends QueueAtom {
 	 * @param moveDev String name of motor to move.
 	 * @param tgt Object target to move motor to.
 	 */
-	public void put(String moveDev, Object tgt) {
+	public void addPositioner(String moveDev, Object tgt) {
 		positionConfig.put(moveDev, tgt);
 	}
 	
@@ -97,19 +108,10 @@ public class MoveAtom extends QueueAtom {
 	 * 
 	 * @param moveDev String name of motor to move.
 	 */
-	public void remove(String moveDev) {
+	public void removePositioner(String moveDev) {
 		positionConfig.remove(moveDev);
 	}
 	
-	/**
-	 * Report the number of motors whose positions are set by this MoveAtom.
-	 * 
-	 * @return int number of motors in the configuration.
-	 */
-	public int size() {
-		return positionConfig.size();
-	}
-
 	/**
 	 * Return complete set of motor names and target positions.
 	 * 
