@@ -1,5 +1,7 @@
 package org.eclipse.scanning.api.event.queues.models.arguments;
 
+import java.util.Arrays;
+
 import org.eclipse.scanning.api.event.queues.models.QueueModelException;
 
 /**
@@ -67,6 +69,23 @@ public class ArrayArg<P, V> extends ArgDecorator<P, V> {
 		value = valuesArray[index];
 	}
 	
+	/**
+	 * Change the index for which the value should be evaluated. This 
+	 * necessarily creates a new ArrayArg object.
+	 *  
+	 * @param index New Integer position in the array.
+	 * @return New ArrayArg with changed index value.
+	 */
+	public ArrayArg<P,V> setIndex(int index) {
+		return new ArrayArg<>(childArg, index);
+	}
+	
+	/**
+	 * Return the value in the held array at a given index.
+	 * 
+	 * @param index integer position in array.
+	 * @return value V at index in array.
+	 */
 	public V index(int index) {
 		if (valuesArray == null) { 
 			this.index = ((this.index == null) ? index : this.index); 
@@ -74,5 +93,41 @@ public class ArrayArg<P, V> extends ArgDecorator<P, V> {
 		}
 		return valuesArray[index];
 	}
+
+	@Override
+	protected String localToString(String str) {
+		return "ArrayArg [" + str + ", value=" + value + "index=" + index + "valuesArray=" + valuesArray + ", childArg=" + childArg + "]";
+	}
+
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = super.hashCode();
+		result = prime * result + ((index == null) ? 0 : index.hashCode());
+		result = prime * result + Arrays.hashCode(valuesArray);
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (!super.equals(obj))
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		ArrayArg<?,?> other = (ArrayArg<?,?>) obj;
+		if (index == null) {
+			if (other.index != null)
+				return false;
+		} else if (!index.equals(other.index))
+			return false;
+		if (!Arrays.equals(valuesArray, other.valuesArray))
+			return false;
+		return true;
+	}
+	
+	
+	
 
 }

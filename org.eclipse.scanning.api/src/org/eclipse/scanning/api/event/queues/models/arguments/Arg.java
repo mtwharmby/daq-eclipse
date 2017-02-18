@@ -10,7 +10,7 @@ package org.eclipse.scanning.api.event.queues.models.arguments;
  */
 public class Arg<V> implements IArg<V> {
 	
-	private V parameter,value;
+	protected V parameter,value;
 	
 	/**
 	 * Construct a new argument with a given parameter.
@@ -41,6 +41,43 @@ public class Arg<V> implements IArg<V> {
 	@Override
 	public V getValue() {
 		return value;
+	}
+	
+
+	@Override
+	public String toString() {
+		return "Arg [value=" + value + ", parameter=" + parameter + "]";
+	}
+
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((parameter == null) ? 0 : parameter.hashCode());
+		result = prime * result + ((value == null) ? 0 : value.hashCode());
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		Arg<?> other = (Arg<?>) obj;
+		if (parameter == null) {
+			if (other.parameter != null)
+				return false;
+		} else if (!parameter.equals(other.parameter))
+			return false;
+		if (value == null) {
+			if (other.value != null)
+				return false;
+		} else if (!value.equals(other.value))
+			return false;
+		return true;
 	}
 
 }

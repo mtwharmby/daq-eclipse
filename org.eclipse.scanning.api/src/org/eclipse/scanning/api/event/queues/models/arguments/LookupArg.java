@@ -32,4 +32,34 @@ public class LookupArg<P, V> extends ArgDecorator<P, V> {
 		value = lookupTable.get(parameter);
 	}
 
+	@Override
+	protected String localToString(String str) {
+		return "LookupArg [" + str + "value=" + value + "lookupTable=" + lookupTable + ", childArg=" + childArg + "]";
+	}
+
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = super.hashCode();
+		result = prime * result + ((lookupTable == null) ? 0 : lookupTable.hashCode());
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (!super.equals(obj))
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		LookupArg<?,?> other = (LookupArg<?,?>) obj;
+		if (lookupTable == null) {
+			if (other.lookupTable != null)
+				return false;
+		} else if (!lookupTable.equals(other.lookupTable))
+			return false;
+		return true;
+	}
+
 }
