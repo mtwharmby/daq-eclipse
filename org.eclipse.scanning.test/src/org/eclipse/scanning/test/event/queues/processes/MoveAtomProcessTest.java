@@ -46,7 +46,7 @@ public class MoveAtomProcessTest {
 		mss = new MockScanService();
 		ServicesHolder.setDeviceService(mss);
 		
-		mvAt = new MoveAtom("Move robot arm", "robot_arm", "1250", 12000);
+		mvAt = new MoveAtom("Move robot arm", "robot_arm", "1250");
 		mvAtProc = new MoveAtomProcess<>(mvAt, pti.getPublisher(), false);
 	}
 	
@@ -111,7 +111,7 @@ public class MoveAtomProcessTest {
 	 */
 	@Test
 	public void testFailure() throws Exception {
-		MoveAtom failAtom = new MoveAtom("Error Causer", "BadgerApocalypseButton", "pushed", 1);
+		MoveAtom failAtom = new MoveAtom("Error Causer", "BadgerApocalypseButton", "pushed");
 		mvAtProc = new MoveAtomProcess<>(failAtom, pti.getPublisher(), false);
 		
 		pti.executeProcess(mvAtProc, failAtom);

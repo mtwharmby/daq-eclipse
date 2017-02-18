@@ -38,7 +38,6 @@ public class MoveAtomTest extends AbstractBeanTest<MoveAtom> {
 	private double targetA = 273.15, targetB = 957.845;
 	private int targetC = 1;
 	private String targetD = "barry";
-	private long timeA = 26430, timeB = 4329;
 	
 	@Before
 	public void buildBeans() throws Exception {
@@ -47,10 +46,8 @@ public class MoveAtomTest extends AbstractBeanTest<MoveAtom> {
 		beanBConf.put(deviceC, targetC);
 		beanBConf.put(deviceD, targetD);
 				
-		
-		beanA = new MoveAtom(nameA, deviceA, targetA, timeA);
-		beanB = new MoveAtom(nameB, beanBConf, timeB);
-		
+		beanA = new MoveAtom(nameA, deviceA, targetA);
+		beanB = new MoveAtom(nameB, beanBConf);
 	}
 	
 	/**
@@ -63,6 +60,6 @@ public class MoveAtomTest extends AbstractBeanTest<MoveAtom> {
 		expected.add(deviceC);
 		expected.add(deviceD);
 		
-		assertEquals("Reported list and the expected list of names differ", expected, beanB.getMotorNames());
+		assertEquals("Reported list and the expected list of names differ", expected, beanB.getPositionerNames());
 	}
 }
